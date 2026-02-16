@@ -254,7 +254,15 @@ function renderStage(stageIndex, stageElapsed) {
 }
 
 function generateSessionId() {
-  return Math.random().toString(36).slice(2, 8).toUpperCase();
+  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  return Array.from({ length: 3 }, () => letters[Math.floor(Math.random() * letters.length)]).join("");
+}
+
+function normalizeSessionCode(value) {
+  return (value || "")
+    .toUpperCase()
+    .replace(/[^A-Z]/g, "")
+    .slice(0, 3);
 }
 
 function getCurrentState() {
@@ -362,8 +370,9 @@ function persistAll(extra = {}, forceSync = false) {
 }
 
 function setSessionCode(code) {
-  currentSessionId = code;
-  sessionIdInput.value = code;
+  const normalized = normalizeSessionCode(code);
+  currentSessionId = normalized;
+  sessionIdInput.value = normalized;
   resetPoll();
 }
 
@@ -402,8 +411,9 @@ function resetPoll() {
 }
 
 async function joinSession() {
-  const raw = sessionIdInput.value.trim().toUpperCase();
+  const raw = normalizeSessionCode(sessionIdInput.value);
   if (!raw) return;
+  sessionIdInput.value = raw;
   if (!cloudReady) return alert("Set Supabase config in script.js first.");
 
   try {
