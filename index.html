@@ -9,6 +9,14 @@
 <body>
   <main class="app">
     <h1>Pizza Dough Tracker</h1>
+    <section class="card">
+      <div class="session-row">
+        <input type="text" id="session-id" placeholder="Session code" />
+        <button id="join-session">Join</button>
+        <button id="copy-session">Copy</button>
+      </div>
+      <p class="subtitle" id="session-status">Cloud: not connected</p>
+    </section>
     <p class="subtitle">Step 1: Enter flour and room temperature.</p>
 
     <section class="card">
@@ -38,6 +46,6 @@
   </main>
 
   <audio id="alert-sound" src="sounds/stage-complete.mp3" preload="auto"></audio>
-  <script src="script.js"></script>
+  <script type="module" src="script.js"></script>
 </body>
 </html>

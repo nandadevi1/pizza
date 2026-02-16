@@ -52,6 +52,12 @@ h1 {
   gap: 10px;
 }
 
+.session-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+}
+
 label {
   font-weight: 600;
   font-size: 0.95rem;
@@ -64,6 +70,10 @@ input {
   border-radius: 10px;
   border: 1px solid var(--border);
   font-size: 1rem;
+}
+
+#session-status {
+  margin-top: 8px;
 }
 
 button {
