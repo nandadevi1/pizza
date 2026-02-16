@@ -332,14 +332,16 @@ async function syncCloud(force = false) {
   const now = Date.now();
   if (!force && now - lastCloudSyncAt < 1000) return;
   try {
-    const remote = await supabaseRead(currentSessionId);
-    const remoteCommandAt = remote?.commandAt || 0;
-    if (remote && remoteCommandAt > controlIssuedAt) {
-      isApplyingRemote = true;
-      applyState(remote);
-      saveProgress({ ...remote, sessionId: currentSessionId });
-      isApplyingRemote = false;
-      return;
+    if (!force) {
+      const remote = await supabaseRead(currentSessionId);
+      const remoteCommandAt = remote?.commandAt || 0;
+      if (remote && remoteCommandAt > controlIssuedAt) {
+        isApplyingRemote = true;
+        applyState(remote);
+        saveProgress({ ...remote, sessionId: currentSessionId });
+        isApplyingRemote = false;
+        return;
+      }
     }
     await supabaseUpsert(getCurrentState());
     lastCloudSyncAt = now;
