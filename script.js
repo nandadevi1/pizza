@@ -362,10 +362,15 @@ function persistAll(extra = {}, forceSync = false) {
 function setSessionCode(code) {
   currentSessionId = code;
   sessionIdInput.value = code;
-  const url = new URL(window.location.href);
-  url.searchParams.set("session", code);
-  history.replaceState({}, "", url);
   resetPoll();
+}
+
+function leaveSession() {
+  currentSessionId = null;
+  sessionIdInput.value = "";
+  if (pollInterval) clearInterval(pollInterval);
+  pollInterval = null;
+  sessionStatus.textContent = cloudReady ? "Cloud: ready" : "Cloud: set Supabase config";
 }
 
 function resetPoll() {
@@ -381,8 +386,9 @@ function resetPoll() {
       const remoteCommandAt = remote.commandAt || 0;
       const localCommandAt = local.commandAt || 0;
       const hasNewerCommand = remoteCommandAt > localCommandAt;
-      const hasNewerState = remoteUpdated > localUpdated;
-      if (!hasNewerCommand && !hasNewerState) return;
+      const hasNewerStateAtSameCommand =
+        remoteCommandAt === localCommandAt && remoteUpdated > localUpdated;
+      if (!hasNewerCommand && !hasNewerStateAtSameCommand) return;
       isApplyingRemote = true;
       applyState(remote);
       saveProgress({ ...remote, sessionId: currentSessionId });
@@ -441,11 +447,18 @@ function clearAllState() {
   timelineDiv.innerHTML = "";
 }
 
+function setDefaultInputs() {
+  flourInput.value = "180";
+  tempInput.value = "20";
+  hydrationInput.value = String(DEFAULT_HYDRATION);
+}
+
 function completeRun() {
   isRunning = false;
   currentStage = stages.length;
   stageStartedAt = null;
   stageElapsedBeforePause = 0;
+  controlIssuedAt = Date.now();
   updateControlState();
   persistAll({}, true);
   renderTimeline(getTotalDuration());
@@ -590,13 +603,22 @@ startBtn.addEventListener("click", () => {
   runStage();
 });
 
-resetBtn.addEventListener("click", () => {
+resetBtn.addEventListener("click", async () => {
   if (isRunning || !processLocked) return;
   if (currentInterval) clearInterval(currentInterval);
+  const sessionToReset = currentSessionId;
   clearAllState();
   controlIssuedAt = Date.now();
   updateControlState();
-  persistAll({}, true);
+  setDefaultInputs();
+  localStorage.removeItem(STORAGE_KEY);
+
+  if (cloudReady && sessionToReset) {
+    currentSessionId = sessionToReset;
+    await syncCloud(true);
+  }
+
+  leaveSession();
 });
 
 joinSessionBtn.addEventListener("click", () => {
@@ -610,21 +632,11 @@ copySessionBtn.addEventListener("click", async () => {
 });
 
 function loadProgress() {
-  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-  if (!saved) {
-    hydrationInput.value = DEFAULT_HYDRATION;
-    updateControlState();
-    return;
-  }
-
-  if (saved.sessionId) {
-    setSessionCode(saved.sessionId);
-  }
-
-  applyState(saved);
-  if (saved.isRunning && cloudReady && saved.sessionId) {
-    void syncCloud(true);
-  }
+  localStorage.removeItem(STORAGE_KEY);
+  clearAllState();
+  setDefaultInputs();
+  updateControlState();
+  leaveSession();
 }
 
 function initCloud() {
@@ -636,20 +648,5 @@ function initCloud() {
   sessionStatus.textContent = "Cloud: ready";
 }
 
-function loadSessionFromUrl() {
-  const fromUrl = new URL(window.location.href).searchParams.get("session");
-  if (!fromUrl) return;
-  sessionIdInput.value = fromUrl.toUpperCase();
-}
-
 initCloud();
-loadSessionFromUrl();
 loadProgress();
-
-if (cloudReady && sessionIdInput.value) {
-  void joinSession();
-}
-
-if (cloudReady && currentSessionId) {
-  resetPoll();
-}
