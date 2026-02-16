@@ -14,6 +14,7 @@ let stages = [];
 let currentStage = 0;
 let currentInterval = null;
 let stageStartedAt = null;
+let stageElapsedBeforePause = 0;
 let processStartedAt = null;
 let isRunning = false;
 
@@ -63,7 +64,8 @@ function getTotalElapsed(now) {
   const doneSeconds = stages
     .slice(0, currentStage)
     .reduce((sum, stage) => sum + stage.duration, 0);
-  const stageElapsed = stageStartedAt ? Math.floor((now - stageStartedAt) / 1000) : 0;
+  const liveElapsed = stageStartedAt ? Math.floor((now - stageStartedAt) / 1000) : 0;
+  const stageElapsed = Math.max(0, stageElapsedBeforePause + liveElapsed);
   return Math.min(doneSeconds + Math.max(0, stageElapsed), getTotalDuration());
 }
 
@@ -137,8 +139,10 @@ function completeRun() {
   isRunning = false;
   currentStage = stages.length;
   stageStartedAt = null;
+  stageElapsedBeforePause = 0;
   startBtn.disabled = true;
-  saveProgress({ isRunning, currentStage, stageStartedAt });
+  startBtn.textContent = "START";
+  saveProgress({ isRunning, currentStage, stageStartedAt, stageElapsedBeforePause });
   renderTimeline(getTotalDuration());
   renderStage(currentStage, 0);
   alert("Dough ready to bake!");
@@ -159,11 +163,13 @@ calculateBtn.addEventListener("click", () => {
   currentStage = 0;
   isRunning = false;
   stageStartedAt = null;
+  stageElapsedBeforePause = 0;
   processStartedAt = null;
   stagesDiv.innerHTML = "";
   renderTimeline(0);
 
   startBtn.disabled = false;
+  startBtn.textContent = "START";
   saveProgress({
     flour,
     temp,
@@ -175,17 +181,39 @@ calculateBtn.addEventListener("click", () => {
     currentStage,
     isRunning,
     stageStartedAt,
+    stageElapsedBeforePause,
     processStartedAt,
   });
 });
 
 startBtn.addEventListener("click", () => {
-  if (!stages.length || isRunning || currentStage >= stages.length) return;
+  if (!stages.length || currentStage >= stages.length) return;
+
+  if (isRunning) {
+    const now = Date.now();
+    const elapsedThisRun = stageStartedAt ? Math.floor((now - stageStartedAt) / 1000) : 0;
+    stageElapsedBeforePause += Math.max(0, elapsedThisRun);
+    isRunning = false;
+    stageStartedAt = null;
+    if (currentInterval) clearInterval(currentInterval);
+    startBtn.textContent = "START";
+    saveProgress({ isRunning, stageStartedAt, stageElapsedBeforePause, currentStage });
+    renderStage(currentStage, Math.min(stageElapsedBeforePause, stages[currentStage].duration));
+    renderTimeline(getTotalElapsed(Date.now()));
+    return;
+  }
+
   isRunning = true;
-  startBtn.disabled = true;
+  startBtn.textContent = "STOP";
   processStartedAt = processStartedAt || Date.now();
   stageStartedAt = Date.now();
-  saveProgress({ isRunning, processStartedAt, stageStartedAt, currentStage });
+  saveProgress({
+    isRunning,
+    processStartedAt,
+    stageStartedAt,
+    stageElapsedBeforePause,
+    currentStage,
+  });
   runStage();
 });
 
@@ -201,7 +229,8 @@ function runStage() {
 
     const now = Date.now();
     const stage = stages[currentStage];
-    const stageElapsed = Math.max(0, Math.floor((now - stageStartedAt) / 1000));
+    const stageElapsedLive = stageStartedAt ? Math.floor((now - stageStartedAt) / 1000) : 0;
+    const stageElapsed = Math.max(0, stageElapsedBeforePause + stageElapsedLive);
 
     renderStage(currentStage, Math.min(stageElapsed, stage.duration));
     renderTimeline(getTotalElapsed(now));
@@ -211,10 +240,11 @@ function runStage() {
       alert(`${stage.name} complete`);
       currentStage += 1;
       stageStartedAt = now;
+      stageElapsedBeforePause = 0;
       if (currentStage >= stages.length) {
         completeRun();
       } else {
-        saveProgress({ currentStage, stageStartedAt });
+        saveProgress({ currentStage, stageStartedAt, stageElapsedBeforePause });
       }
     }
   };
@@ -239,6 +269,7 @@ function loadProgress() {
   currentStage = typeof saved.currentStage === "number" ? saved.currentStage : 0;
   isRunning = Boolean(saved.isRunning);
   stageStartedAt = saved.stageStartedAt || null;
+  stageElapsedBeforePause = saved.stageElapsedBeforePause || 0;
   processStartedAt = saved.processStartedAt || null;
 
   if (saved.water && saved.yeast && saved.salt) {
@@ -246,7 +277,8 @@ function loadProgress() {
   }
 
   if (stages.length) {
-    startBtn.disabled = currentStage >= stages.length || isRunning;
+    startBtn.disabled = currentStage >= stages.length;
+    startBtn.textContent = isRunning ? "STOP" : "START";
     const now = Date.now();
 
     if (isRunning && stageStartedAt) {
@@ -254,7 +286,7 @@ function loadProgress() {
       return;
     }
 
-    const stageElapsed = 0;
+    const stageElapsed = stageElapsedBeforePause;
     renderStage(currentStage, stageElapsed);
     renderTimeline(getTotalElapsed(now));
   }
