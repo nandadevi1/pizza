@@ -51,10 +51,11 @@ function calculateStageDurations(hydration, temp) {
 }
 
 function formatTime(totalSeconds) {
-  const safe = Math.max(0, totalSeconds);
-  const mins = Math.floor(safe / 60);
-  const secs = safe % 60;
-  return `${mins}m ${secs}s`;
+  const safe = Math.max(0, Math.floor(totalSeconds));
+  const hours = String(Math.floor(safe / 3600)).padStart(2, "0");
+  const minutes = String(Math.floor((safe % 3600) / 60)).padStart(2, "0");
+  const seconds = String(safe % 60).padStart(2, "0");
+  return `${hours}:${minutes}:${seconds}`;
 }
 
 function getTotalDuration() {
