@@ -324,10 +324,10 @@ function saveProgress(data) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
 }
 
-async function syncCloud() {
+async function syncCloud(force = false) {
   if (!cloudReady || !currentSessionId || isApplyingRemote) return;
   const now = Date.now();
-  if (now - lastCloudSyncAt < 4000) return;
+  if (!force && now - lastCloudSyncAt < 4000) return;
   try {
     await supabaseUpsert(getCurrentState());
     lastCloudSyncAt = now;
@@ -337,14 +337,14 @@ async function syncCloud() {
   }
 }
 
-function persistAll(extra = {}) {
+function persistAll(extra = {}, forceSync = false) {
   const payload = {
     ...getCurrentState(),
     ...extra,
     sessionId: currentSessionId,
   };
   saveProgress(payload);
-  void syncCloud();
+  void syncCloud(forceSync);
 }
 
 function setSessionCode(code) {
@@ -353,6 +353,7 @@ function setSessionCode(code) {
   const url = new URL(window.location.href);
   url.searchParams.set("session", code);
   history.replaceState({}, "", url);
+  resetPoll();
 }
 
 function resetPoll() {
@@ -371,7 +372,7 @@ function resetPoll() {
     } catch {
       sessionStatus.textContent = "Cloud: poll failed";
     }
-  }, 10000);
+  }, 2000);
 }
 
 async function joinSession() {
@@ -389,7 +390,7 @@ async function joinSession() {
 
     if (localUpdated > remoteUpdated && local.sessionId === raw) {
       applyState(local);
-      void syncCloud();
+      void syncCloud(true);
     } else {
       isApplyingRemote = true;
       applyState(remote);
@@ -422,7 +423,7 @@ function completeRun() {
   stageStartedAt = null;
   stageElapsedBeforePause = 0;
   updateControlState();
-  persistAll();
+  persistAll({}, true);
   renderTimeline(getTotalDuration());
   renderStage(currentStage, 0);
   alert("Dough ready to bake!");
@@ -462,7 +463,7 @@ function runCalculation() {
   renderTimeline(0);
 
   updateControlState();
-  persistAll({ water, yeast, salt });
+  persistAll({ water, yeast, salt }, true);
 }
 
 function runStage() {
@@ -498,7 +499,7 @@ function runStage() {
       if (currentStage >= stages.length) {
         completeRun();
       } else {
-        persistAll();
+        persistAll({}, true);
       }
     }
   };
@@ -540,7 +541,7 @@ startBtn.addEventListener("click", () => {
     stageStartedAt = null;
     if (currentInterval) clearInterval(currentInterval);
     updateControlState();
-    persistAll();
+    persistAll({}, true);
     renderStage(
       currentStage,
       Math.min(stageElapsedBeforePause, stages[currentStage].duration),
@@ -558,7 +559,7 @@ startBtn.addEventListener("click", () => {
   updateControlState();
   processStartedAt = processStartedAt || Date.now();
   stageStartedAt = Date.now();
-  persistAll();
+  persistAll({}, true);
   runStage();
 });
 
@@ -594,7 +595,7 @@ function loadProgress() {
 
   applyState(saved);
   if (saved.isRunning && cloudReady && saved.sessionId) {
-    void syncCloud();
+    void syncCloud(true);
   }
 }
 
