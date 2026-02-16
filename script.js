@@ -571,7 +571,7 @@ function runCalculation() {
   const flour = parseFloat(flourInput.value);
   const temp = parseFloat(tempInput.value);
   const hydrationRaw = parseFloat(hydrationInput.value);
-  const hydration = clamp(55, 87, hydrationRaw);
+  const hydration = hydrationRaw;
   const roomTempC = clamp(15, 30, temp);
   const proofMode = proofModeInput.value || DEFAULT_PROOF_MODE;
 
@@ -580,7 +580,9 @@ function runCalculation() {
     !temp ||
     !hydrationRaw ||
     flour <= 0 ||
-    temp <= 0
+    temp <= 0 ||
+    hydration < 40 ||
+    hydration > 90
   ) {
     return alert("Enter valid values.");
   }
@@ -588,7 +590,6 @@ function runCalculation() {
   if (currentInterval) clearInterval(currentInterval);
   isRunning = false;
   controlIssuedAt = Date.now();
-  hydrationInput.value = hydration.toFixed(1);
 
   const water = ((flour * hydration) / 100).toFixed(1);
   const salt = (flour * 0.025).toFixed(2);
@@ -681,7 +682,8 @@ hydrationInput.addEventListener("input", () => {
     !hydration ||
     flour <= 0 ||
     temp <= 0 ||
-    hydration <= 0
+    hydration < 40 ||
+    hydration > 90
   )
     return;
   runCalculation();
