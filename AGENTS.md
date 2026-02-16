@@ -3,6 +3,11 @@
 ## Project Overview
 Simple mobile-first pizza dough tracking web app. Vanilla JavaScript (ES2023), HTML5, CSS3. No build system or dependencies. Calculates ingredients and tracks dough stages with progress bars.
 
+## Global Collaboration Rule
+- Implement only what the user explicitly requests.
+- Do not add extra features proactively.
+- If an additional feature appears necessary, ask for approval before implementing it.
+
 ## File Structure
 ```
 web app 2/
