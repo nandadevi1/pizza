@@ -103,7 +103,7 @@ function activityFactor(tempC) {
 
 function buildStagePlan(hydration, proofMode, roomTempC) {
   const isHighHydration = hydration >= 75;
-  const autolyseSec = isHighHydration ? 25 * 60 : 0;
+  const autolyseSec = 25 * 60;
   const bulkOrBenchSec = isHighHydration ? Math.round(2.25 * 3600) : 20 * 60;
   const roomProofSec = Math.round(3 * 3600 * (activityFactor(21) / activityFactor(roomTempC)));
   const roomOvernightRoomSec = 5 * 3600;
@@ -111,11 +111,9 @@ function buildStagePlan(hydration, proofMode, roomTempC) {
   const temperSec = proofMode === "room_temperature" ? 0 : 2 * 3600;
 
   const stagePlan = [];
-  if (autolyseSec > 0) {
-    stagePlan.push({ name: "Autolyse", color: "#ff3b30", duration: autolyseSec });
-  }
+  stagePlan.push({ name: "Autolyse", color: "#ff3b30", duration: autolyseSec });
   stagePlan.push({
-    name: isHighHydration ? "Bulk Fermentation" : "Bench Rest",
+    name: "Bulk Fermentation",
     color: "#0ea5e9",
     duration: bulkOrBenchSec,
   });
@@ -126,11 +124,9 @@ function buildStagePlan(hydration, proofMode, roomTempC) {
   });
   if (proofMode === "room_overnight") {
     stagePlan.length = 0;
-    if (autolyseSec > 0) {
-      stagePlan.push({ name: "Autolyse", color: "#ff3b30", duration: autolyseSec });
-    }
+    stagePlan.push({ name: "Autolyse", color: "#ff3b30", duration: autolyseSec });
     stagePlan.push({
-      name: isHighHydration ? "Bulk Fermentation" : "Bench Rest",
+      name: "Bulk Fermentation",
       color: "#0ea5e9",
       duration: bulkOrBenchSec,
     });
