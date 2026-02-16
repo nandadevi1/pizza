@@ -15,8 +15,8 @@ const alertSound = document.getElementById("alert-sound");
 
 const STORAGE_KEY = "pizzaTracker";
 const DEFAULT_HYDRATION = 65;
-const SUPABASE_URL = "REPLACE_SUPABASE_URL";
-const SUPABASE_ANON_KEY = "REPLACE_SUPABASE_ANON_KEY";
+const SUPABASE_URL = "https://tpmugvtxgkagdozrkcfy.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_Tj0fgw02gBrxnns4FloHzg_4c1yNUKx";
 const SUPABASE_TABLE = "dough_sessions";
 
 let stages = [];
@@ -35,8 +35,8 @@ let isApplyingRemote = false;
 
 function hasSupabaseConfig() {
   return (
-    SUPABASE_URL !== "REPLACE_SUPABASE_URL"
-    && SUPABASE_ANON_KEY !== "REPLACE_SUPABASE_ANON_KEY"
+    SUPABASE_URL !== "REPLACE_SUPABASE_URL" &&
+    SUPABASE_ANON_KEY !== "REPLACE_SUPABASE_ANON_KEY"
   );
 }
 
@@ -88,7 +88,9 @@ function calculateStageDurations(hydration, temp) {
     {
       name: "Fermentation",
       color: "#0ea5e9",
-      duration: Math.round(baseFermentation * 60 * tempFactor * hydrationFactor),
+      duration: Math.round(
+        baseFermentation * 60 * tempFactor * hydrationFactor,
+      ),
     },
     {
       name: "Proofing",
@@ -111,12 +113,15 @@ function getTotalDuration() {
 }
 
 function getTotalElapsed(now) {
-  if (!stages.length || currentStage >= stages.length) return getTotalDuration();
+  if (!stages.length || currentStage >= stages.length)
+    return getTotalDuration();
 
   const doneSeconds = stages
     .slice(0, currentStage)
     .reduce((sum, stage) => sum + stage.duration, 0);
-  const liveElapsed = stageStartedAt ? Math.floor((now - stageStartedAt) / 1000) : 0;
+  const liveElapsed = stageStartedAt
+    ? Math.floor((now - stageStartedAt) / 1000)
+    : 0;
   const stageElapsed = Math.max(0, stageElapsedBeforePause + liveElapsed);
   return Math.min(doneSeconds + Math.max(0, stageElapsed), getTotalDuration());
 }
@@ -243,7 +248,10 @@ function getCurrentState() {
     flour: parseFloat(flourInput.value) || null,
     temp: parseFloat(tempInput.value) || null,
     hydration: parseFloat(hydrationInput.value) || DEFAULT_HYDRATION,
-    water: ((parseFloat(flourInput.value) || 0) * ((parseFloat(hydrationInput.value) || DEFAULT_HYDRATION) / 100)).toFixed(1),
+    water: (
+      (parseFloat(flourInput.value) || 0) *
+      ((parseFloat(hydrationInput.value) || DEFAULT_HYDRATION) / 100)
+    ).toFixed(1),
     yeast: ((parseFloat(flourInput.value) || 0) * 0.02).toFixed(2),
     salt: ((parseFloat(flourInput.value) || 0) * 0.02).toFixed(2),
     stages,
@@ -265,7 +273,8 @@ function applyState(state) {
   hydrationInput.value = state.hydration ?? DEFAULT_HYDRATION;
 
   stages = state.stages || [];
-  currentStage = typeof state.currentStage === "number" ? state.currentStage : 0;
+  currentStage =
+    typeof state.currentStage === "number" ? state.currentStage : 0;
   isRunning = Boolean(state.isRunning);
   processLocked = Boolean(state.processLocked);
   stageStartedAt = state.stageStartedAt || null;
@@ -280,7 +289,10 @@ function applyState(state) {
     if (isRunning) {
       runStage();
     } else {
-      renderStage(currentStage, Math.min(stageElapsedBeforePause, stages[currentStage]?.duration || 0));
+      renderStage(
+        currentStage,
+        Math.min(stageElapsedBeforePause, stages[currentStage]?.duration || 0),
+      );
       renderTimeline(getTotalElapsed(Date.now()));
       if (currentInterval) clearInterval(currentInterval);
     }
@@ -310,7 +322,11 @@ async function syncCloud() {
 }
 
 function persistAll(extra = {}) {
-  const payload = { ...getCurrentState(), ...extra, sessionId: currentSessionId };
+  const payload = {
+    ...getCurrentState(),
+    ...extra,
+    sessionId: currentSessionId,
+  };
   saveProgress(payload);
   void syncCloud();
 }
@@ -392,7 +408,14 @@ function runCalculation() {
   const temp = parseFloat(tempInput.value);
   const hydration = parseFloat(hydrationInput.value);
 
-  if (!flour || !temp || !hydration || flour <= 0 || temp <= 0 || hydration <= 0) {
+  if (
+    !flour ||
+    !temp ||
+    !hydration ||
+    flour <= 0 ||
+    temp <= 0 ||
+    hydration <= 0
+  ) {
     return alert("Enter valid values.");
   }
 
@@ -429,8 +452,13 @@ function runStage() {
 
     const now = Date.now();
     const stage = stages[currentStage];
-    const stageElapsedLive = stageStartedAt ? Math.floor((now - stageStartedAt) / 1000) : 0;
-    const stageElapsed = Math.max(0, stageElapsedBeforePause + stageElapsedLive);
+    const stageElapsedLive = stageStartedAt
+      ? Math.floor((now - stageStartedAt) / 1000)
+      : 0;
+    const stageElapsed = Math.max(
+      0,
+      stageElapsedBeforePause + stageElapsedLive,
+    );
 
     renderStage(currentStage, Math.min(stageElapsed, stage.duration));
     renderTimeline(getTotalElapsed(now));
@@ -461,7 +489,15 @@ hydrationInput.addEventListener("input", () => {
   const flour = parseFloat(flourInput.value);
   const temp = parseFloat(tempInput.value);
   const hydration = parseFloat(hydrationInput.value);
-  if (!flour || !temp || !hydration || flour <= 0 || temp <= 0 || hydration <= 0) return;
+  if (
+    !flour ||
+    !temp ||
+    !hydration ||
+    flour <= 0 ||
+    temp <= 0 ||
+    hydration <= 0
+  )
+    return;
   runCalculation();
 });
 
@@ -470,14 +506,19 @@ startBtn.addEventListener("click", () => {
 
   if (isRunning) {
     const now = Date.now();
-    const elapsedThisRun = stageStartedAt ? Math.floor((now - stageStartedAt) / 1000) : 0;
+    const elapsedThisRun = stageStartedAt
+      ? Math.floor((now - stageStartedAt) / 1000)
+      : 0;
     stageElapsedBeforePause += Math.max(0, elapsedThisRun);
     isRunning = false;
     stageStartedAt = null;
     if (currentInterval) clearInterval(currentInterval);
     updateControlState();
     persistAll();
-    renderStage(currentStage, Math.min(stageElapsedBeforePause, stages[currentStage].duration));
+    renderStage(
+      currentStage,
+      Math.min(stageElapsedBeforePause, stages[currentStage].duration),
+    );
     renderTimeline(getTotalElapsed(Date.now()));
     return;
   }
