@@ -4,6 +4,10 @@ const hydrationInput = document.getElementById("hydration");
 const calculateBtn = document.getElementById("calculate");
 const startBtn = document.getElementById("start");
 const resetBtn = document.getElementById("reset");
+const sessionIdInput = document.getElementById("session-id");
+const joinSessionBtn = document.getElementById("join-session");
+const copySessionBtn = document.getElementById("copy-session");
+const sessionStatus = document.getElementById("session-status");
 const ingredientsDiv = document.getElementById("ingredients");
 const stagesDiv = document.getElementById("stages");
 const timelineDiv = document.getElementById("timeline");
@@ -11,6 +15,9 @@ const alertSound = document.getElementById("alert-sound");
 
 const STORAGE_KEY = "pizzaTracker";
 const DEFAULT_HYDRATION = 65;
+const SUPABASE_URL = "REPLACE_SUPABASE_URL";
+const SUPABASE_ANON_KEY = "REPLACE_SUPABASE_ANON_KEY";
+const SUPABASE_TABLE = "dough_sessions";
 
 let stages = [];
 let currentStage = 0;
@@ -20,6 +27,49 @@ let stageElapsedBeforePause = 0;
 let processStartedAt = null;
 let isRunning = false;
 let processLocked = false;
+
+let cloudReady = false;
+let currentSessionId = null;
+let pollInterval = null;
+let isApplyingRemote = false;
+
+function hasSupabaseConfig() {
+  return (
+    SUPABASE_URL !== "REPLACE_SUPABASE_URL"
+    && SUPABASE_ANON_KEY !== "REPLACE_SUPABASE_ANON_KEY"
+  );
+}
+
+function supabaseHeaders() {
+  return {
+    apikey: SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    "Content-Type": "application/json",
+    Prefer: "return=representation",
+  };
+}
+
+async function supabaseUpsert(payload) {
+  if (!cloudReady || !currentSessionId) return null;
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}`, {
+    method: "POST",
+    headers: supabaseHeaders(),
+    body: JSON.stringify([{ session_id: currentSessionId, state: payload }]),
+  });
+  if (!res.ok) throw new Error("cloud save failed");
+  return res.json();
+}
+
+async function supabaseRead(sessionId) {
+  if (!cloudReady) return null;
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?session_id=eq.${encodeURIComponent(sessionId)}&select=state`,
+    { headers: supabaseHeaders() },
+  );
+  if (!res.ok) throw new Error("cloud read failed");
+  const rows = await res.json();
+  return rows.length ? rows[0].state : null;
+}
 
 function calculateStageDurations(hydration, temp) {
   const baseAutolyse = 20;
@@ -38,9 +88,7 @@ function calculateStageDurations(hydration, temp) {
     {
       name: "Fermentation",
       color: "#0ea5e9",
-      duration: Math.round(
-        baseFermentation * 60 * tempFactor * hydrationFactor,
-      ),
+      duration: Math.round(baseFermentation * 60 * tempFactor * hydrationFactor),
     },
     {
       name: "Proofing",
@@ -186,21 +234,158 @@ function renderStage(stageIndex, stageElapsed) {
   `;
 }
 
+function generateSessionId() {
+  return Math.random().toString(36).slice(2, 8).toUpperCase();
+}
+
+function getCurrentState() {
+  return {
+    flour: parseFloat(flourInput.value) || null,
+    temp: parseFloat(tempInput.value) || null,
+    hydration: parseFloat(hydrationInput.value) || DEFAULT_HYDRATION,
+    water: ((parseFloat(flourInput.value) || 0) * ((parseFloat(hydrationInput.value) || DEFAULT_HYDRATION) / 100)).toFixed(1),
+    yeast: ((parseFloat(flourInput.value) || 0) * 0.02).toFixed(2),
+    salt: ((parseFloat(flourInput.value) || 0) * 0.02).toFixed(2),
+    stages,
+    currentStage,
+    isRunning,
+    processLocked,
+    stageStartedAt,
+    stageElapsedBeforePause,
+    processStartedAt,
+    updatedAtMs: Date.now(),
+  };
+}
+
+function applyState(state) {
+  if (!state) return;
+
+  flourInput.value = state.flour ?? "";
+  tempInput.value = state.temp ?? "";
+  hydrationInput.value = state.hydration ?? DEFAULT_HYDRATION;
+
+  stages = state.stages || [];
+  currentStage = typeof state.currentStage === "number" ? state.currentStage : 0;
+  isRunning = Boolean(state.isRunning);
+  processLocked = Boolean(state.processLocked);
+  stageStartedAt = state.stageStartedAt || null;
+  stageElapsedBeforePause = state.stageElapsedBeforePause || 0;
+  processStartedAt = state.processStartedAt || null;
+
+  if (state.water && state.yeast && state.salt) {
+    renderIngredients(state.water, state.yeast, state.salt);
+  }
+
+  if (stages.length) {
+    if (isRunning) {
+      runStage();
+    } else {
+      renderStage(currentStage, Math.min(stageElapsedBeforePause, stages[currentStage]?.duration || 0));
+      renderTimeline(getTotalElapsed(Date.now()));
+      if (currentInterval) clearInterval(currentInterval);
+    }
+  } else {
+    stagesDiv.innerHTML = "";
+    timelineDiv.innerHTML = "";
+    if (currentInterval) clearInterval(currentInterval);
+  }
+
+  updateControlState();
+}
+
+function saveProgress(data) {
+  const existing = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+  const updated = { ...existing, ...data };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+}
+
+async function syncCloud() {
+  if (!cloudReady || !currentSessionId || isApplyingRemote) return;
+  try {
+    await supabaseUpsert(getCurrentState());
+    sessionStatus.textContent = `Cloud: session ${currentSessionId}`;
+  } catch {
+    sessionStatus.textContent = "Cloud: sync failed";
+  }
+}
+
+function persistAll(extra = {}) {
+  const payload = { ...getCurrentState(), ...extra, sessionId: currentSessionId };
+  saveProgress(payload);
+  void syncCloud();
+}
+
+function setSessionCode(code) {
+  currentSessionId = code;
+  sessionIdInput.value = code;
+  const url = new URL(window.location.href);
+  url.searchParams.set("session", code);
+  history.replaceState({}, "", url);
+}
+
+function resetPoll() {
+  if (pollInterval) clearInterval(pollInterval);
+  if (!cloudReady || !currentSessionId) return;
+  pollInterval = setInterval(async () => {
+    try {
+      const remote = await supabaseRead(currentSessionId);
+      if (!remote) return;
+      const local = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+      if ((remote.updatedAtMs || 0) <= (local.updatedAtMs || 0)) return;
+      isApplyingRemote = true;
+      applyState(remote);
+      saveProgress({ ...remote, sessionId: currentSessionId });
+      isApplyingRemote = false;
+    } catch {
+      sessionStatus.textContent = "Cloud: poll failed";
+    }
+  }, 10000);
+}
+
+async function joinSession() {
+  const raw = sessionIdInput.value.trim().toUpperCase();
+  if (!raw) return;
+  if (!cloudReady) return alert("Set Supabase config in script.js first.");
+
+  try {
+    const remote = await supabaseRead(raw);
+    if (!remote) return alert("Session not found");
+    setSessionCode(raw);
+    isApplyingRemote = true;
+    applyState(remote);
+    saveProgress({ ...remote, sessionId: raw });
+    isApplyingRemote = false;
+    sessionStatus.textContent = `Cloud: joined ${raw}`;
+    resetPoll();
+  } catch {
+    sessionStatus.textContent = "Cloud: join failed";
+  }
+}
+
+function clearAllState() {
+  stages = [];
+  currentStage = 0;
+  stageStartedAt = null;
+  stageElapsedBeforePause = 0;
+  processStartedAt = null;
+  isRunning = false;
+  processLocked = false;
+  ingredientsDiv.innerHTML = "";
+  stagesDiv.innerHTML = "";
+  timelineDiv.innerHTML = "";
+}
+
 function completeRun() {
   isRunning = false;
   currentStage = stages.length;
   stageStartedAt = null;
   stageElapsedBeforePause = 0;
   updateControlState();
-  saveProgress({ isRunning, currentStage, stageStartedAt, stageElapsedBeforePause, processLocked });
+  persistAll();
   renderTimeline(getTotalDuration());
   renderStage(currentStage, 0);
   alert("Dough ready to bake!");
 }
-
-calculateBtn.addEventListener("click", () => {
-  runCalculation();
-});
 
 function runCalculation() {
   const flour = parseFloat(flourInput.value);
@@ -229,82 +414,8 @@ function runCalculation() {
   renderTimeline(0);
 
   updateControlState();
-  saveProgress({
-    flour,
-    temp,
-    water,
-    yeast,
-    salt,
-    hydration: hydration.toFixed(1),
-    stages,
-    currentStage,
-    isRunning,
-    stageStartedAt,
-    stageElapsedBeforePause,
-    processStartedAt,
-    processLocked,
-  });
+  persistAll({ water, yeast, salt });
 }
-
-hydrationInput.addEventListener("input", () => {
-  const flour = parseFloat(flourInput.value);
-  const temp = parseFloat(tempInput.value);
-  const hydration = parseFloat(hydrationInput.value);
-  if (!flour || !temp || !hydration || flour <= 0 || temp <= 0 || hydration <= 0) return;
-  runCalculation();
-});
-
-startBtn.addEventListener("click", () => {
-  if (!stages.length || currentStage >= stages.length) return;
-
-  if (isRunning) {
-    const now = Date.now();
-    const elapsedThisRun = stageStartedAt ? Math.floor((now - stageStartedAt) / 1000) : 0;
-    stageElapsedBeforePause += Math.max(0, elapsedThisRun);
-    isRunning = false;
-    stageStartedAt = null;
-    if (currentInterval) clearInterval(currentInterval);
-    updateControlState();
-    saveProgress({ isRunning, stageStartedAt, stageElapsedBeforePause, currentStage, processLocked });
-    renderStage(currentStage, Math.min(stageElapsedBeforePause, stages[currentStage].duration));
-    renderTimeline(getTotalElapsed(Date.now()));
-    return;
-  }
-
-  isRunning = true;
-  processLocked = true;
-  updateControlState();
-  processStartedAt = processStartedAt || Date.now();
-  stageStartedAt = Date.now();
-  saveProgress({
-    isRunning,
-    processStartedAt,
-    stageStartedAt,
-    stageElapsedBeforePause,
-    currentStage,
-    processLocked,
-  });
-  runStage();
-});
-
-resetBtn.addEventListener("click", () => {
-  if (isRunning || !processLocked) return;
-  if (currentInterval) clearInterval(currentInterval);
-
-  stages = [];
-  currentStage = 0;
-  stageStartedAt = null;
-  stageElapsedBeforePause = 0;
-  processStartedAt = null;
-  isRunning = false;
-  processLocked = false;
-
-  ingredientsDiv.innerHTML = "";
-  stagesDiv.innerHTML = "";
-  timelineDiv.innerHTML = "";
-  localStorage.removeItem(STORAGE_KEY);
-  updateControlState();
-});
 
 function runStage() {
   if (!isRunning) return;
@@ -333,7 +444,7 @@ function runStage() {
       if (currentStage >= stages.length) {
         completeRun();
       } else {
-        saveProgress({ currentStage, stageStartedAt, stageElapsedBeforePause, processLocked });
+        persistAll();
       }
     }
   };
@@ -342,46 +453,104 @@ function runStage() {
   currentInterval = setInterval(tick, 1000);
 }
 
-function saveProgress(data) {
-  const existing = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
-  const updated = { ...existing, ...data };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-}
+calculateBtn.addEventListener("click", () => {
+  runCalculation();
+});
+
+hydrationInput.addEventListener("input", () => {
+  const flour = parseFloat(flourInput.value);
+  const temp = parseFloat(tempInput.value);
+  const hydration = parseFloat(hydrationInput.value);
+  if (!flour || !temp || !hydration || flour <= 0 || temp <= 0 || hydration <= 0) return;
+  runCalculation();
+});
+
+startBtn.addEventListener("click", () => {
+  if (!stages.length || currentStage >= stages.length) return;
+
+  if (isRunning) {
+    const now = Date.now();
+    const elapsedThisRun = stageStartedAt ? Math.floor((now - stageStartedAt) / 1000) : 0;
+    stageElapsedBeforePause += Math.max(0, elapsedThisRun);
+    isRunning = false;
+    stageStartedAt = null;
+    if (currentInterval) clearInterval(currentInterval);
+    updateControlState();
+    persistAll();
+    renderStage(currentStage, Math.min(stageElapsedBeforePause, stages[currentStage].duration));
+    renderTimeline(getTotalElapsed(Date.now()));
+    return;
+  }
+
+  if (!currentSessionId && cloudReady) {
+    setSessionCode(generateSessionId());
+  }
+
+  isRunning = true;
+  processLocked = true;
+  updateControlState();
+  processStartedAt = processStartedAt || Date.now();
+  stageStartedAt = Date.now();
+  persistAll();
+  runStage();
+});
+
+resetBtn.addEventListener("click", () => {
+  if (isRunning || !processLocked) return;
+  if (currentInterval) clearInterval(currentInterval);
+  clearAllState();
+  updateControlState();
+  persistAll();
+});
+
+joinSessionBtn.addEventListener("click", () => {
+  void joinSession();
+});
+
+copySessionBtn.addEventListener("click", async () => {
+  if (!currentSessionId) return;
+  await navigator.clipboard.writeText(currentSessionId);
+  sessionStatus.textContent = `Cloud: copied ${currentSessionId}`;
+});
 
 function loadProgress() {
   const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-  if (!saved) return;
-
-  flourInput.value = saved.flour || "";
-  tempInput.value = saved.temp || "";
-  hydrationInput.value = saved.hydration || DEFAULT_HYDRATION;
-  stages = saved.stages || [];
-  currentStage = typeof saved.currentStage === "number" ? saved.currentStage : 0;
-  isRunning = Boolean(saved.isRunning);
-  stageStartedAt = saved.stageStartedAt || null;
-  stageElapsedBeforePause = saved.stageElapsedBeforePause || 0;
-  processStartedAt = saved.processStartedAt || null;
-  processLocked = Boolean(saved.processLocked);
-
-  if (saved.water && saved.yeast && saved.salt) {
-    renderIngredients(saved.water, saved.yeast, saved.salt);
+  if (!saved) {
+    hydrationInput.value = DEFAULT_HYDRATION;
+    updateControlState();
+    return;
   }
 
-  if (stages.length) {
-    updateControlState();
-    const now = Date.now();
-
-    if (isRunning && stageStartedAt) {
-      runStage();
-      return;
-    }
-
-    const stageElapsed = stageElapsedBeforePause;
-    renderStage(currentStage, stageElapsed);
-    renderTimeline(getTotalElapsed(now));
-  } else {
-    updateControlState();
+  if (saved.sessionId) {
+    setSessionCode(saved.sessionId);
   }
+
+  applyState(saved);
 }
 
+function initCloud() {
+  if (!hasSupabaseConfig()) {
+    sessionStatus.textContent = "Cloud: set Supabase config";
+    return;
+  }
+  cloudReady = true;
+  sessionStatus.textContent = "Cloud: ready";
+}
+
+function loadSessionFromUrl() {
+  const fromUrl = new URL(window.location.href).searchParams.get("session");
+  if (!fromUrl) return;
+  sessionIdInput.value = fromUrl.toUpperCase();
+}
+
+initCloud();
+loadSessionFromUrl();
 loadProgress();
+
+if (cloudReady && sessionIdInput.value) {
+  void joinSession();
+}
+
+if (cloudReady && currentSessionId) {
+  resetPoll();
+}
