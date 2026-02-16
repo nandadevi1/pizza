@@ -51,12 +51,21 @@ function supabaseHeaders() {
 
 async function supabaseUpsert(payload) {
   if (!cloudReady || !currentSessionId) return null;
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}`, {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?on_conflict=session_id`,
+    {
     method: "POST",
-    headers: supabaseHeaders(),
-    body: JSON.stringify([{ session_id: currentSessionId, state: payload }]),
-  });
-  if (!res.ok) throw new Error("cloud save failed");
+      headers: {
+        ...supabaseHeaders(),
+        Prefer: "resolution=merge-duplicates,return=representation",
+      },
+      body: JSON.stringify([{ session_id: currentSessionId, state: payload }]),
+    },
+  );
+  if (!res.ok) {
+    const details = await res.text();
+    throw new Error(`cloud save failed (${res.status}) ${details}`);
+  }
   return res.json();
 }
 
@@ -66,7 +75,10 @@ async function supabaseRead(sessionId) {
     `${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?session_id=eq.${encodeURIComponent(sessionId)}&select=state`,
     { headers: supabaseHeaders() },
   );
-  if (!res.ok) throw new Error("cloud read failed");
+  if (!res.ok) {
+    const details = await res.text();
+    throw new Error(`cloud read failed (${res.status}) ${details}`);
+  }
   const rows = await res.json();
   return rows.length ? rows[0].state : null;
 }
@@ -316,8 +328,8 @@ async function syncCloud() {
   try {
     await supabaseUpsert(getCurrentState());
     sessionStatus.textContent = `Cloud: session ${currentSessionId}`;
-  } catch {
-    sessionStatus.textContent = "Cloud: sync failed";
+  } catch (error) {
+    sessionStatus.textContent = `Cloud: ${error.message}`;
   }
 }
 
@@ -352,7 +364,7 @@ function resetPoll() {
       applyState(remote);
       saveProgress({ ...remote, sessionId: currentSessionId });
       isApplyingRemote = false;
-    } catch {
+  } catch {
       sessionStatus.textContent = "Cloud: poll failed";
     }
   }, 10000);
@@ -373,8 +385,8 @@ async function joinSession() {
     isApplyingRemote = false;
     sessionStatus.textContent = `Cloud: joined ${raw}`;
     resetPoll();
-  } catch {
-    sessionStatus.textContent = "Cloud: join failed";
+  } catch (error) {
+    sessionStatus.textContent = `Cloud: ${error.message}`;
   }
 }
 

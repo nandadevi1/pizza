@@ -54,7 +54,7 @@ h1 {
 
 .session-row {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 8px;
 }
 
@@ -205,5 +205,21 @@ button:disabled {
 
   .timeline-legend {
     grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 460px) {
+  .session-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  #session-id {
+    grid-column: 1 / -1;
+  }
+
+  #join-session,
+  #copy-session {
+    padding: 10px 8px;
+    font-size: 0.9rem;
   }
 }
