@@ -72,6 +72,16 @@ input {
   font-size: 1rem;
 }
 
+select {
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  font-size: 1rem;
+  background: #fff;
+}
+
 #session-status {
   margin-top: 8px;
 }

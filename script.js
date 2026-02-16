@@ -1,6 +1,8 @@
 const flourInput = document.getElementById("flour");
 const tempInput = document.getElementById("temp");
 const hydrationInput = document.getElementById("hydration");
+const doughFamilyInput = document.getElementById("dough-family");
+const proofModeInput = document.getElementById("proof-mode");
 const calculateBtn = document.getElementById("calculate");
 const startBtn = document.getElementById("start");
 const resetBtn = document.getElementById("reset");
@@ -15,6 +17,8 @@ const alertSound = document.getElementById("alert-sound");
 
 const STORAGE_KEY = "pizzaTracker";
 const DEFAULT_HYDRATION = 65;
+const DEFAULT_DOUGH_FAMILY = "medium_crust";
+const DEFAULT_PROOF_MODE = "same_day_room";
 const SUPABASE_URL = "https://tpmugvtxgkagdozrkcfy.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_Tj0fgw02gBrxnns4FloHzg_4c1yNUKx";
 const SUPABASE_TABLE = "dough_sessions";
@@ -85,33 +89,59 @@ async function supabaseRead(sessionId) {
   return rows.length ? rows[0].state : null;
 }
 
-function calculateStageDurations(hydration, temp) {
-  const baseAutolyse = 20;
-  const baseFermentation = 120;
-  const baseProofing = 60;
+function clamp(min, max, value) {
+  return Math.min(max, Math.max(min, value));
+}
 
-  const tempFactor = 22 / temp;
-  const hydrationFactor = 65 / hydration;
+function activityFactor(tempC) {
+  return 2 ** ((tempC - 21) / 10);
+}
 
-  return [
-    {
-      name: "Autolyse",
-      color: "#ff3b30",
-      duration: Math.round(baseAutolyse * 60 * hydrationFactor),
-    },
-    {
-      name: "Fermentation",
-      color: "#0ea5e9",
-      duration: Math.round(
-        baseFermentation * 60 * tempFactor * hydrationFactor,
-      ),
-    },
-    {
-      name: "Proofing",
-      color: "#34d399",
-      duration: Math.round(baseProofing * 60 * tempFactor * hydrationFactor),
-    },
-  ];
+function buildStagePlan(doughFamily, proofMode, roomTempC) {
+  const autolyseSec = doughFamily === "high_hydration" ? 25 * 60 : 0;
+  const bulkOrBenchSec = doughFamily === "high_hydration" ? Math.round(2.25 * 3600) : 20 * 60;
+  const roomProofSec = Math.round(3 * 3600 * (activityFactor(21) / activityFactor(roomTempC)));
+  const coldProofSec = proofMode === "cold_24h" ? 24 * 3600 : proofMode === "cold_48h" ? 48 * 3600 : 0;
+  const temperSec = proofMode === "same_day_room" ? 0 : 2 * 3600;
+
+  const stagePlan = [];
+  if (autolyseSec > 0) {
+    stagePlan.push({ name: "Autolyse", color: "#ff3b30", duration: autolyseSec });
+  }
+  stagePlan.push({
+    name: doughFamily === "high_hydration" ? "Bulk Fermentation" : "Bench Rest",
+    color: "#0ea5e9",
+    duration: bulkOrBenchSec,
+  });
+  stagePlan.push({
+    name: proofMode === "same_day_room" ? "Final Proof" : "Cold Proof",
+    color: "#f59e0b",
+    duration: proofMode === "same_day_room" ? roomProofSec : coldProofSec,
+  });
+  if (temperSec > 0) {
+    stagePlan.push({ name: "Temper", color: "#34d399", duration: temperSec });
+  }
+
+  return { stagePlan, autolyseSec, bulkOrBenchSec, roomProofSec, coldProofSec, temperSec };
+}
+
+function calculateYeastPct(proofMode, bulkOrBenchSec, roomProofSec, coldProofSec, temperSec, roomTempC) {
+  const bulkOrBenchHours = bulkOrBenchSec / 3600;
+  const roomProofHours = roomProofSec / 3600;
+  const coldProofHours = coldProofSec / 3600;
+  const temperHours = temperSec / 3600;
+
+  let efu = 0;
+  if (proofMode === "same_day_room") {
+    efu = (bulkOrBenchHours + roomProofHours) * activityFactor(roomTempC);
+  } else {
+    efu =
+      bulkOrBenchHours * activityFactor(roomTempC) +
+      coldProofHours * activityFactor(4) +
+      temperHours * activityFactor(roomTempC);
+  }
+
+  return clamp(0.03, 1.0, 1.6 / Math.max(efu, 0.01));
 }
 
 function formatTime(totalSeconds) {
@@ -144,6 +174,8 @@ function setEditingEnabled(enabled) {
   flourInput.disabled = !enabled;
   tempInput.disabled = !enabled;
   hydrationInput.disabled = !enabled;
+  doughFamilyInput.disabled = !enabled;
+  proofModeInput.disabled = !enabled;
   calculateBtn.disabled = !enabled;
 }
 
@@ -266,16 +298,31 @@ function normalizeSessionCode(value) {
 }
 
 function getCurrentState() {
+  const flour = parseFloat(flourInput.value) || 0;
+  const hydration = parseFloat(hydrationInput.value) || DEFAULT_HYDRATION;
+  const roomTempC = clamp(15, 30, parseFloat(tempInput.value) || 20);
+  const doughFamily = doughFamilyInput.value || DEFAULT_DOUGH_FAMILY;
+  const proofMode = proofModeInput.value || DEFAULT_PROOF_MODE;
+  const { bulkOrBenchSec, roomProofSec, coldProofSec, temperSec } =
+    buildStagePlan(doughFamily, proofMode, roomTempC);
+  const yeastPct = calculateYeastPct(
+    proofMode,
+    bulkOrBenchSec,
+    roomProofSec,
+    coldProofSec,
+    temperSec,
+    roomTempC,
+  );
+
   return {
-    flour: parseFloat(flourInput.value) || null,
+    flour: flour || null,
     temp: parseFloat(tempInput.value) || null,
-    hydration: parseFloat(hydrationInput.value) || DEFAULT_HYDRATION,
-    water: (
-      (parseFloat(flourInput.value) || 0) *
-      ((parseFloat(hydrationInput.value) || DEFAULT_HYDRATION) / 100)
-    ).toFixed(1),
-    yeast: ((parseFloat(flourInput.value) || 0) * 0.02).toFixed(2),
-    salt: ((parseFloat(flourInput.value) || 0) * 0.02).toFixed(2),
+    hydration,
+    doughFamily,
+    proofMode,
+    water: ((flour * hydration) / 100).toFixed(1),
+    yeast: (flour * (yeastPct / 100)).toFixed(2),
+    salt: (flour * 0.025).toFixed(2),
     stages,
     currentStage,
     isRunning,
@@ -294,6 +341,8 @@ function applyState(state) {
   flourInput.value = state.flour ?? "";
   tempInput.value = state.temp ?? "";
   hydrationInput.value = state.hydration ?? DEFAULT_HYDRATION;
+  doughFamilyInput.value = state.doughFamily || DEFAULT_DOUGH_FAMILY;
+  proofModeInput.value = state.proofMode || DEFAULT_PROOF_MODE;
 
   stages = state.stages || [];
   currentStage =
@@ -463,6 +512,8 @@ function setDefaultInputs() {
   flourInput.value = "180";
   tempInput.value = "20";
   hydrationInput.value = String(DEFAULT_HYDRATION);
+  doughFamilyInput.value = DEFAULT_DOUGH_FAMILY;
+  proofModeInput.value = DEFAULT_PROOF_MODE;
 }
 
 function completeRun() {
@@ -481,15 +532,18 @@ function completeRun() {
 function runCalculation() {
   const flour = parseFloat(flourInput.value);
   const temp = parseFloat(tempInput.value);
-  const hydration = parseFloat(hydrationInput.value);
+  const hydrationRaw = parseFloat(hydrationInput.value);
+  const hydration = clamp(55, 87, hydrationRaw);
+  const roomTempC = clamp(15, 30, temp);
+  let doughFamily = doughFamilyInput.value || DEFAULT_DOUGH_FAMILY;
+  const proofMode = proofModeInput.value || DEFAULT_PROOF_MODE;
 
   if (
     !flour ||
     !temp ||
-    !hydration ||
+    !hydrationRaw ||
     flour <= 0 ||
-    temp <= 0 ||
-    hydration <= 0
+    temp <= 0
   ) {
     return alert("Enter valid values.");
   }
@@ -497,13 +551,29 @@ function runCalculation() {
   if (currentInterval) clearInterval(currentInterval);
   isRunning = false;
   controlIssuedAt = Date.now();
+  hydrationInput.value = hydration.toFixed(1);
+
+  if (hydration >= 75 && doughFamily !== "high_hydration") {
+    doughFamily = "high_hydration";
+    doughFamilyInput.value = "high_hydration";
+  }
 
   const water = ((flour * hydration) / 100).toFixed(1);
-  const yeast = (flour * 0.02).toFixed(2);
-  const salt = (flour * 0.02).toFixed(2);
+  const salt = (flour * 0.025).toFixed(2);
+  const { stagePlan, bulkOrBenchSec, roomProofSec, coldProofSec, temperSec } =
+    buildStagePlan(doughFamily, proofMode, roomTempC);
+  const yeastPct = calculateYeastPct(
+    proofMode,
+    bulkOrBenchSec,
+    roomProofSec,
+    coldProofSec,
+    temperSec,
+    roomTempC,
+  );
+  const yeast = (flour * (yeastPct / 100)).toFixed(2);
 
   renderIngredients(water, yeast, salt);
-  stages = calculateStageDurations(hydration, temp);
+  stages = stagePlan;
   currentStage = 0;
   stageStartedAt = null;
   stageElapsedBeforePause = 0;
@@ -575,6 +645,16 @@ hydrationInput.addEventListener("input", () => {
     hydration <= 0
   )
     return;
+  runCalculation();
+});
+
+proofModeInput.addEventListener("change", () => {
+  if (calculateBtn.disabled) return;
+  runCalculation();
+});
+
+doughFamilyInput.addEventListener("change", () => {
+  if (calculateBtn.disabled) return;
   runCalculation();
 });
 

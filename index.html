@@ -28,6 +28,19 @@
         <label for="hydration">Hydration (%)</label>
         <input type="number" id="hydration" min="40" max="90" step="0.1" value="65" />
 
+        <label for="dough-family">Dough Family</label>
+        <select id="dough-family">
+          <option value="medium_crust" selected>Medium Crust</option>
+          <option value="high_hydration">High Hydration</option>
+        </select>
+
+        <label for="proof-mode">Proof Mode</label>
+        <select id="proof-mode">
+          <option value="same_day_room" selected>Same Day (Room)</option>
+          <option value="cold_24h">Cold Proof 24h</option>
+          <option value="cold_48h">Cold Proof 48h</option>
+        </select>
+
         <div class="button-row">
           <button id="calculate">Calculate</button>
           <button id="start" disabled>START</button>
