@@ -225,7 +225,7 @@ function updateControlState() {
   setEditingEnabled(!processLocked);
   startBtn.disabled = !stages.length || currentStage >= stages.length;
   startBtn.textContent = isRunning ? "STOP" : "START";
-  resetBtn.disabled = !processLocked || isRunning;
+  resetBtn.disabled = !stages.length || isRunning;
 }
 
 function renderIngredients(water, yeast, salt) {
@@ -678,28 +678,6 @@ calculateBtn.addEventListener("click", () => {
   runCalculation();
 });
 
-hydrationInput.addEventListener("input", () => {
-  const flour = parseFloat(flourInput.value);
-  const temp = parseFloat(tempInput.value);
-  const hydration = parseFloat(hydrationInput.value);
-  if (
-    !flour ||
-    !temp ||
-    !hydration ||
-    flour <= 0 ||
-    temp <= 0 ||
-    hydration < 40 ||
-    hydration > 90
-  )
-    return;
-  runCalculation();
-});
-
-proofModeInput.addEventListener("change", () => {
-  if (calculateBtn.disabled) return;
-  runCalculation();
-});
-
 startBtn.addEventListener("click", () => {
   if (!stages.length || currentStage >= stages.length) return;
 
@@ -738,7 +716,7 @@ startBtn.addEventListener("click", () => {
 });
 
 resetBtn.addEventListener("click", async () => {
-  if (isRunning || !processLocked) return;
+  if (isRunning || !stages.length) return;
   if (currentInterval) clearInterval(currentInterval);
   const sessionToReset = currentSessionId;
   clearAllState();
