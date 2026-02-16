@@ -32,6 +32,7 @@ let cloudReady = false;
 let currentSessionId = null;
 let pollInterval = null;
 let isApplyingRemote = false;
+let lastCloudSyncAt = 0;
 
 function hasSupabaseConfig() {
   return (
@@ -325,8 +326,11 @@ function saveProgress(data) {
 
 async function syncCloud() {
   if (!cloudReady || !currentSessionId || isApplyingRemote) return;
+  const now = Date.now();
+  if (now - lastCloudSyncAt < 4000) return;
   try {
     await supabaseUpsert(getCurrentState());
+    lastCloudSyncAt = now;
     sessionStatus.textContent = `Cloud: session ${currentSessionId}`;
   } catch (error) {
     sessionStatus.textContent = `Cloud: ${error.message}`;
@@ -364,7 +368,7 @@ function resetPoll() {
       applyState(remote);
       saveProgress({ ...remote, sessionId: currentSessionId });
       isApplyingRemote = false;
-  } catch {
+    } catch {
       sessionStatus.textContent = "Cloud: poll failed";
     }
   }, 10000);
@@ -379,10 +383,19 @@ async function joinSession() {
     const remote = await supabaseRead(raw);
     if (!remote) return alert("Session not found");
     setSessionCode(raw);
-    isApplyingRemote = true;
-    applyState(remote);
-    saveProgress({ ...remote, sessionId: raw });
-    isApplyingRemote = false;
+    const local = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+    const remoteUpdated = remote.updatedAtMs || 0;
+    const localUpdated = local.updatedAtMs || 0;
+
+    if (localUpdated > remoteUpdated && local.sessionId === raw) {
+      applyState(local);
+      void syncCloud();
+    } else {
+      isApplyingRemote = true;
+      applyState(remote);
+      saveProgress({ ...remote, sessionId: raw });
+      isApplyingRemote = false;
+    }
     sessionStatus.textContent = `Cloud: joined ${raw}`;
     resetPoll();
   } catch (error) {
@@ -474,6 +487,7 @@ function runStage() {
 
     renderStage(currentStage, Math.min(stageElapsed, stage.duration));
     renderTimeline(getTotalElapsed(now));
+    if (cloudReady && currentSessionId) void syncCloud();
 
     if (stageElapsed >= stage.duration) {
       alertSound.play().catch(() => {});
@@ -579,6 +593,9 @@ function loadProgress() {
   }
 
   applyState(saved);
+  if (saved.isRunning && cloudReady && saved.sessionId) {
+    void syncCloud();
+  }
 }
 
 function initCloud() {
