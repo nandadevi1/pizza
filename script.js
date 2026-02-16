@@ -33,6 +33,7 @@ let currentSessionId = null;
 let pollInterval = null;
 let isApplyingRemote = false;
 let lastCloudSyncAt = 0;
+let controlIssuedAt = 0;
 
 function hasSupabaseConfig() {
   return (
@@ -274,6 +275,7 @@ function getCurrentState() {
     stageStartedAt,
     stageElapsedBeforePause,
     processStartedAt,
+    commandAt: controlIssuedAt,
     updatedAtMs: Date.now(),
   };
 }
@@ -293,6 +295,7 @@ function applyState(state) {
   stageStartedAt = state.stageStartedAt || null;
   stageElapsedBeforePause = state.stageElapsedBeforePause || 0;
   processStartedAt = state.processStartedAt || null;
+  controlIssuedAt = state.commandAt || 0;
 
   if (state.water && state.yeast && state.salt) {
     renderIngredients(state.water, state.yeast, state.salt);
@@ -327,8 +330,17 @@ function saveProgress(data) {
 async function syncCloud(force = false) {
   if (!cloudReady || !currentSessionId || isApplyingRemote) return;
   const now = Date.now();
-  if (!force && now - lastCloudSyncAt < 4000) return;
+  if (!force && now - lastCloudSyncAt < 1000) return;
   try {
+    const remote = await supabaseRead(currentSessionId);
+    const remoteCommandAt = remote?.commandAt || 0;
+    if (remote && remoteCommandAt > controlIssuedAt) {
+      isApplyingRemote = true;
+      applyState(remote);
+      saveProgress({ ...remote, sessionId: currentSessionId });
+      isApplyingRemote = false;
+      return;
+    }
     await supabaseUpsert(getCurrentState());
     lastCloudSyncAt = now;
     sessionStatus.textContent = `Cloud: session ${currentSessionId}`;
@@ -364,7 +376,13 @@ function resetPoll() {
       const remote = await supabaseRead(currentSessionId);
       if (!remote) return;
       const local = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
-      if ((remote.updatedAtMs || 0) <= (local.updatedAtMs || 0)) return;
+      const remoteUpdated = remote.updatedAtMs || 0;
+      const localUpdated = local.updatedAtMs || 0;
+      const remoteCommandAt = remote.commandAt || 0;
+      const localCommandAt = local.commandAt || 0;
+      const hasNewerCommand = remoteCommandAt > localCommandAt;
+      const hasNewerState = remoteUpdated > localUpdated;
+      if (!hasNewerCommand && !hasNewerState) return;
       isApplyingRemote = true;
       applyState(remote);
       saveProgress({ ...remote, sessionId: currentSessionId });
@@ -387,8 +405,14 @@ async function joinSession() {
     const local = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
     const remoteUpdated = remote.updatedAtMs || 0;
     const localUpdated = local.updatedAtMs || 0;
+    const remoteCommandAt = remote.commandAt || 0;
+    const localCommandAt = local.commandAt || 0;
 
-    if (localUpdated > remoteUpdated && local.sessionId === raw) {
+    if (
+      local.sessionId === raw &&
+      (localCommandAt > remoteCommandAt ||
+        (localCommandAt === remoteCommandAt && localUpdated > remoteUpdated))
+    ) {
       applyState(local);
       void syncCloud(true);
     } else {
@@ -447,6 +471,7 @@ function runCalculation() {
 
   if (currentInterval) clearInterval(currentInterval);
   isRunning = false;
+  controlIssuedAt = Date.now();
 
   const water = ((flour * hydration) / 100).toFixed(1);
   const yeast = (flour * 0.02).toFixed(2);
@@ -539,6 +564,7 @@ startBtn.addEventListener("click", () => {
     stageElapsedBeforePause += Math.max(0, elapsedThisRun);
     isRunning = false;
     stageStartedAt = null;
+    controlIssuedAt = Date.now();
     if (currentInterval) clearInterval(currentInterval);
     updateControlState();
     persistAll({}, true);
@@ -556,6 +582,7 @@ startBtn.addEventListener("click", () => {
 
   isRunning = true;
   processLocked = true;
+  controlIssuedAt = Date.now();
   updateControlState();
   processStartedAt = processStartedAt || Date.now();
   stageStartedAt = Date.now();
@@ -567,8 +594,9 @@ resetBtn.addEventListener("click", () => {
   if (isRunning || !processLocked) return;
   if (currentInterval) clearInterval(currentInterval);
   clearAllState();
+  controlIssuedAt = Date.now();
   updateControlState();
-  persistAll();
+  persistAll({}, true);
 });
 
 joinSessionBtn.addEventListener("click", () => {
