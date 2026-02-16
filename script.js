@@ -3,6 +3,7 @@ const tempInput = document.getElementById("temp");
 const hydrationInput = document.getElementById("hydration");
 const doughFamilyInput = document.getElementById("dough-family");
 const proofModeInput = document.getElementById("proof-mode");
+const roomFermentHoursInput = document.getElementById("room-ferment-hours");
 const calculateBtn = document.getElementById("calculate");
 const startBtn = document.getElementById("start");
 const resetBtn = document.getElementById("reset");
@@ -18,7 +19,8 @@ const alertSound = document.getElementById("alert-sound");
 const STORAGE_KEY = "pizzaTracker";
 const DEFAULT_HYDRATION = 65;
 const DEFAULT_DOUGH_FAMILY = "medium_crust";
-const DEFAULT_PROOF_MODE = "same_day_room";
+const DEFAULT_PROOF_MODE = "room_overnight";
+const DEFAULT_ROOM_FERMENT_HOURS = 5;
 const SUPABASE_URL = "https://tpmugvtxgkagdozrkcfy.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_Tj0fgw02gBrxnns4FloHzg_4c1yNUKx";
 const SUPABASE_TABLE = "dough_sessions";
@@ -97,10 +99,12 @@ function activityFactor(tempC) {
   return 2 ** ((tempC - 21) / 10);
 }
 
-function buildStagePlan(doughFamily, proofMode, roomTempC) {
+function buildStagePlan(doughFamily, proofMode, roomTempC, roomFermentHours) {
   const autolyseSec = doughFamily === "high_hydration" ? 25 * 60 : 0;
   const bulkOrBenchSec = doughFamily === "high_hydration" ? Math.round(2.25 * 3600) : 20 * 60;
   const roomProofSec = Math.round(3 * 3600 * (activityFactor(21) / activityFactor(roomTempC)));
+  const roomOvernightRoomSec = Math.round(roomFermentHours * 3600);
+  const overnightColdSec = 12 * 3600;
   const coldProofSec = proofMode === "cold_24h" ? 24 * 3600 : proofMode === "cold_48h" ? 48 * 3600 : 0;
   const temperSec = proofMode === "same_day_room" ? 0 : 2 * 3600;
 
@@ -118,22 +122,67 @@ function buildStagePlan(doughFamily, proofMode, roomTempC) {
     color: "#f59e0b",
     duration: proofMode === "same_day_room" ? roomProofSec : coldProofSec,
   });
+  if (proofMode === "room_overnight") {
+    stagePlan.length = 0;
+    if (autolyseSec > 0) {
+      stagePlan.push({ name: "Autolyse", color: "#ff3b30", duration: autolyseSec });
+    }
+    stagePlan.push({
+      name: doughFamily === "high_hydration" ? "Bulk Fermentation" : "Bench Rest",
+      color: "#0ea5e9",
+      duration: bulkOrBenchSec,
+    });
+    stagePlan.push({
+      name: "Room Ferment",
+      color: "#f59e0b",
+      duration: roomOvernightRoomSec,
+    });
+    stagePlan.push({
+      name: "Overnight Cold Proof",
+      color: "#a78bfa",
+      duration: overnightColdSec,
+    });
+  }
   if (temperSec > 0) {
     stagePlan.push({ name: "Temper", color: "#34d399", duration: temperSec });
   }
 
-  return { stagePlan, autolyseSec, bulkOrBenchSec, roomProofSec, coldProofSec, temperSec };
+  return {
+    stagePlan,
+    autolyseSec,
+    bulkOrBenchSec,
+    roomProofSec,
+    coldProofSec,
+    temperSec,
+    roomOvernightRoomSec,
+    overnightColdSec,
+  };
 }
 
-function calculateYeastPct(proofMode, bulkOrBenchSec, roomProofSec, coldProofSec, temperSec, roomTempC) {
+function calculateYeastPct(
+  proofMode,
+  bulkOrBenchSec,
+  roomProofSec,
+  coldProofSec,
+  temperSec,
+  roomTempC,
+  roomOvernightRoomSec,
+  overnightColdSec,
+) {
   const bulkOrBenchHours = bulkOrBenchSec / 3600;
   const roomProofHours = roomProofSec / 3600;
   const coldProofHours = coldProofSec / 3600;
   const temperHours = temperSec / 3600;
+  const roomOvernightRoomHours = roomOvernightRoomSec / 3600;
+  const overnightColdHours = overnightColdSec / 3600;
 
   let efu = 0;
   if (proofMode === "same_day_room") {
     efu = (bulkOrBenchHours + roomProofHours) * activityFactor(roomTempC);
+  } else if (proofMode === "room_overnight") {
+    efu =
+      (bulkOrBenchHours + roomOvernightRoomHours + temperHours) * activityFactor(roomTempC) +
+      overnightColdHours * activityFactor(4);
   } else {
     efu =
       bulkOrBenchHours * activityFactor(roomTempC) +
@@ -176,6 +225,7 @@ function setEditingEnabled(enabled) {
   hydrationInput.disabled = !enabled;
   doughFamilyInput.disabled = !enabled;
   proofModeInput.disabled = !enabled;
+  roomFermentHoursInput.disabled = !enabled;
   calculateBtn.disabled = !enabled;
 }
 
@@ -303,8 +353,15 @@ function getCurrentState() {
   const roomTempC = clamp(15, 30, parseFloat(tempInput.value) || 20);
   const doughFamily = doughFamilyInput.value || DEFAULT_DOUGH_FAMILY;
   const proofMode = proofModeInput.value || DEFAULT_PROOF_MODE;
-  const { bulkOrBenchSec, roomProofSec, coldProofSec, temperSec } =
-    buildStagePlan(doughFamily, proofMode, roomTempC);
+  const roomFermentHours = clamp(4, 6, parseFloat(roomFermentHoursInput.value) || DEFAULT_ROOM_FERMENT_HOURS);
+  const {
+    bulkOrBenchSec,
+    roomProofSec,
+    coldProofSec,
+    temperSec,
+    roomOvernightRoomSec,
+    overnightColdSec,
+  } = buildStagePlan(doughFamily, proofMode, roomTempC, roomFermentHours);
   const yeastPct = calculateYeastPct(
     proofMode,
     bulkOrBenchSec,
@@ -312,6 +369,8 @@ function getCurrentState() {
     coldProofSec,
     temperSec,
     roomTempC,
+    roomOvernightRoomSec,
+    overnightColdSec,
   );
 
   return {
@@ -320,6 +379,7 @@ function getCurrentState() {
     hydration,
     doughFamily,
     proofMode,
+    roomFermentHours,
     water: ((flour * hydration) / 100).toFixed(1),
     yeast: (flour * (yeastPct / 100)).toFixed(2),
     salt: (flour * 0.025).toFixed(2),
@@ -343,6 +403,7 @@ function applyState(state) {
   hydrationInput.value = state.hydration ?? DEFAULT_HYDRATION;
   doughFamilyInput.value = state.doughFamily || DEFAULT_DOUGH_FAMILY;
   proofModeInput.value = state.proofMode || DEFAULT_PROOF_MODE;
+  roomFermentHoursInput.value = state.roomFermentHours || DEFAULT_ROOM_FERMENT_HOURS;
 
   stages = state.stages || [];
   currentStage =
@@ -514,6 +575,7 @@ function setDefaultInputs() {
   hydrationInput.value = String(DEFAULT_HYDRATION);
   doughFamilyInput.value = DEFAULT_DOUGH_FAMILY;
   proofModeInput.value = DEFAULT_PROOF_MODE;
+  roomFermentHoursInput.value = String(DEFAULT_ROOM_FERMENT_HOURS);
 }
 
 function completeRun() {
@@ -537,6 +599,7 @@ function runCalculation() {
   const roomTempC = clamp(15, 30, temp);
   let doughFamily = doughFamilyInput.value || DEFAULT_DOUGH_FAMILY;
   const proofMode = proofModeInput.value || DEFAULT_PROOF_MODE;
+  const roomFermentHours = clamp(4, 6, parseFloat(roomFermentHoursInput.value) || DEFAULT_ROOM_FERMENT_HOURS);
 
   if (
     !flour ||
@@ -560,8 +623,15 @@ function runCalculation() {
 
   const water = ((flour * hydration) / 100).toFixed(1);
   const salt = (flour * 0.025).toFixed(2);
-  const { stagePlan, bulkOrBenchSec, roomProofSec, coldProofSec, temperSec } =
-    buildStagePlan(doughFamily, proofMode, roomTempC);
+  const {
+    stagePlan,
+    bulkOrBenchSec,
+    roomProofSec,
+    coldProofSec,
+    temperSec,
+    roomOvernightRoomSec,
+    overnightColdSec,
+  } = buildStagePlan(doughFamily, proofMode, roomTempC, roomFermentHours);
   const yeastPct = calculateYeastPct(
     proofMode,
     bulkOrBenchSec,
@@ -569,6 +639,8 @@ function runCalculation() {
     coldProofSec,
     temperSec,
     roomTempC,
+    roomOvernightRoomSec,
+    overnightColdSec,
   );
   const yeast = (flour * (yeastPct / 100)).toFixed(2);
 
@@ -649,6 +721,11 @@ hydrationInput.addEventListener("input", () => {
 });
 
 proofModeInput.addEventListener("change", () => {
+  if (calculateBtn.disabled) return;
+  runCalculation();
+});
+
+roomFermentHoursInput.addEventListener("input", () => {
   if (calculateBtn.disabled) return;
   runCalculation();
 });
