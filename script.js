@@ -225,7 +225,11 @@ function updateControlState() {
   setEditingEnabled(!processLocked);
   startBtn.disabled = !stages.length || currentStage >= stages.length;
   startBtn.textContent = isRunning ? "STOP" : "START";
-  resetBtn.disabled = !stages.length || isRunning;
+  const canReset = stages.length > 0 && !isRunning;
+  const canNewSession = stages.length === 0 && !isRunning && Boolean(currentSessionId);
+  resetBtn.disabled = !(canReset || canNewSession);
+  resetBtn.textContent = canNewSession ? "NEW SESSION" : "RESET";
+  resetBtn.classList.toggle("new-session", canNewSession);
 }
 
 function renderIngredients(water, yeast, salt) {
@@ -716,11 +720,26 @@ startBtn.addEventListener("click", () => {
 });
 
 resetBtn.addEventListener("click", async () => {
-  if (isRunning || !stages.length) return;
+  if (isRunning || resetBtn.disabled) return;
+
+  if (!stages.length && currentSessionId) {
+    const newSessionId = generateSessionId();
+    clearAllState();
+    setDefaultInputs();
+    processLocked = false;
+    controlIssuedAt = nextCommandAt();
+    setSessionCode(newSessionId);
+    saveProgress({ ...getCurrentState(), sessionId: newSessionId });
+    updateControlState();
+    return;
+  }
+
+  if (!stages.length) return;
   if (currentInterval) clearInterval(currentInterval);
   const sessionToReset = currentSessionId;
   clearAllState();
   controlIssuedAt = nextCommandAt();
+  processLocked = false;
   updateControlState();
   setDefaultInputs();
   localStorage.removeItem(STORAGE_KEY);
@@ -733,9 +752,16 @@ resetBtn.addEventListener("click", async () => {
     };
     try {
       await supabaseUpsert(resetPayload);
+      currentSessionId = sessionToReset;
+      sessionIdInput.value = sessionToReset;
+      saveProgress({ ...resetPayload, sessionId: sessionToReset });
+      resetPoll();
+      sessionStatus.textContent = `Cloud: session ${sessionToReset}`;
     } catch (error) {
       sessionStatus.textContent = `Cloud: ${error.message}`;
     }
+    updateControlState();
+    return;
   }
 
   leaveSession();

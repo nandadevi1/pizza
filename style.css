@@ -107,6 +107,11 @@ button:disabled {
   color: #111827;
 }
 
+#reset.new-session:not(:disabled) {
+  background: #22c55e;
+  color: #ffffff;
+}
+
 .button-row {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
