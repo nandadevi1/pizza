@@ -102,6 +102,11 @@ button:disabled {
   opacity: 0.5;
 }
 
+#reset:not(:disabled) {
+  background: #f59e0b;
+  color: #111827;
+}
+
 .button-row {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;

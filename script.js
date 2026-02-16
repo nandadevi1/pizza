@@ -54,7 +54,9 @@ function supabaseHeaders() {
 }
 
 async function supabaseUpsert(payload) {
-  if (!cloudReady || !currentSessionId) return null;
+  const sessionId = payload.sessionId || currentSessionId;
+  if (!cloudReady || !sessionId) return null;
+  const { sessionId: _ignored, ...statePayload } = payload;
   const res = await fetch(
     `${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?on_conflict=session_id`,
     {
@@ -63,7 +65,7 @@ async function supabaseUpsert(payload) {
         ...supabaseHeaders(),
         Prefer: "resolution=merge-duplicates,return=representation",
       },
-      body: JSON.stringify([{ session_id: currentSessionId, state: payload }]),
+      body: JSON.stringify([{ session_id: sessionId, state: statePayload }]),
     },
   );
   if (!res.ok) {
@@ -89,6 +91,10 @@ async function supabaseRead(sessionId) {
 
 function clamp(min, max, value) {
   return Math.min(max, Math.max(min, value));
+}
+
+function nextCommandAt() {
+  return Math.max(Date.now(), controlIssuedAt + 1);
 }
 
 function activityFactor(tempC) {
@@ -559,7 +565,7 @@ function completeRun() {
   currentStage = stages.length;
   stageStartedAt = null;
   stageElapsedBeforePause = 0;
-  controlIssuedAt = Date.now();
+  controlIssuedAt = nextCommandAt();
   updateControlState();
   persistAll({}, true);
   renderTimeline(getTotalDuration());
@@ -589,7 +595,7 @@ function runCalculation() {
 
   if (currentInterval) clearInterval(currentInterval);
   isRunning = false;
-  controlIssuedAt = Date.now();
+  controlIssuedAt = nextCommandAt();
 
   const water = ((flour * hydration) / 100).toFixed(1);
   const salt = (flour * 0.025).toFixed(2);
@@ -705,7 +711,7 @@ startBtn.addEventListener("click", () => {
     stageElapsedBeforePause += Math.max(0, elapsedThisRun);
     isRunning = false;
     stageStartedAt = null;
-    controlIssuedAt = Date.now();
+    controlIssuedAt = nextCommandAt();
     if (currentInterval) clearInterval(currentInterval);
     updateControlState();
     persistAll({}, true);
@@ -723,7 +729,7 @@ startBtn.addEventListener("click", () => {
 
   isRunning = true;
   processLocked = true;
-  controlIssuedAt = Date.now();
+  controlIssuedAt = nextCommandAt();
   updateControlState();
   processStartedAt = processStartedAt || Date.now();
   stageStartedAt = Date.now();
@@ -736,14 +742,22 @@ resetBtn.addEventListener("click", async () => {
   if (currentInterval) clearInterval(currentInterval);
   const sessionToReset = currentSessionId;
   clearAllState();
-  controlIssuedAt = Date.now();
+  controlIssuedAt = nextCommandAt();
   updateControlState();
   setDefaultInputs();
   localStorage.removeItem(STORAGE_KEY);
 
   if (cloudReady && sessionToReset) {
-    currentSessionId = sessionToReset;
-    await syncCloud(true);
+    const resetPayload = {
+      ...getCurrentState(),
+      sessionId: sessionToReset,
+      updatedAtMs: Date.now(),
+    };
+    try {
+      await supabaseUpsert(resetPayload);
+    } catch (error) {
+      sessionStatus.textContent = `Cloud: ${error.message}`;
+    }
   }
 
   leaveSession();
