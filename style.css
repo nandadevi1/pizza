@@ -53,12 +53,6 @@ h1 {
   gap: 10px;
 }
 
-.session-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 8px;
-}
-
 label {
   font-weight: 600;
   font-size: 0.95rem;
@@ -83,10 +77,6 @@ select {
   background: #fff;
 }
 
-#session-status {
-  margin-top: 8px;
-}
-
 button {
   padding: 12px;
   width: 100%;
@@ -107,14 +97,9 @@ button:disabled {
   color: #111827;
 }
 
-#reset.new-session:not(:disabled) {
-  background: #22c55e;
-  color: #ffffff;
-}
-
 .button-row {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
 
@@ -142,38 +127,15 @@ button:disabled {
   margin-bottom: 4px;
 }
 
-.stage-title {
-  font-weight: 700;
-}
-
-.stage-timer {
-  color: var(--muted);
-  margin-top: 4px;
-}
-
-.progress-bar {
-  width: 100%;
-  background: var(--track);
-  border-radius: 0;
-  overflow: hidden;
-  height: 14px;
-  margin-top: 10px;
-}
-
-.progress-inner {
-  width: 0%;
-  height: 100%;
-  background: var(--success);
-  transition: width 1s linear;
-}
-
-.stage-complete .progress-inner {
-  background: var(--complete);
-}
-
 .timeline-card h2 {
-  margin: 0 0 10px;
+  margin: 0 0 4px;
   font-size: 1rem;
+}
+
+.timeline-total {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-weight: 600;
 }
 
 .timeline-track {
@@ -186,17 +148,13 @@ button:disabled {
 }
 
 .timeline-segment {
+  display: grid;
+  place-items: center;
   height: 100%;
   float: left;
   min-width: 16%;
-}
-
-.timeline-fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 0%;
-  background: rgba(255, 255, 255, 0.55);
-  border-right: 3px solid #111827;
+  color: #fff;
+  font-weight: 700;
 }
 
 .timeline-legend {
@@ -209,38 +167,36 @@ button:disabled {
 }
 
 .timeline-legend li {
-  display: block;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  align-items: center;
   color: var(--muted);
   font-size: 1rem;
   font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.timeline-legend strong {
+  color: var(--text);
 }
 
 .swatch {
-  display: none;
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+}
+
+.stage-step {
+  font-size: 0.8rem;
+  text-transform: uppercase;
 }
 
 @media (min-width: 640px) {
   body {
     padding: 24px;
-  }
-
-  .timeline-legend {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-@media (max-width: 460px) {
-  .session-row {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  #session-id {
-    grid-column: 1 / -1;
-  }
-
-  #join-session,
-  #copy-session {
-    padding: 10px 8px;
-    font-size: 0.9rem;
   }
 }
