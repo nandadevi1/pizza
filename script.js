@@ -193,7 +193,7 @@ function renderTimeline() {
 function getCurrentState() {
   const flour = parseFloat(flourInput.value) || 0;
   const hydration = parseFloat(hydrationInput.value) || DEFAULT_HYDRATION;
-  const roomTempC = clamp(15, 30, parseFloat(tempInput.value) || 20);
+  const roomTempC = clamp(0, 40, parseFloat(tempInput.value) || 20);
   const proofMode = proofModeInput.value || DEFAULT_PROOF_MODE;
   const {
     bulkOrBenchSec,
@@ -282,7 +282,7 @@ function runCalculation() {
   const temp = parseFloat(tempInput.value);
   const hydrationRaw = parseFloat(hydrationInput.value);
   const hydration = hydrationRaw;
-  const roomTempC = clamp(15, 30, temp);
+  const roomTempC = clamp(0, 40, temp);
   const proofMode = proofModeInput.value || DEFAULT_PROOF_MODE;
 
   if (
