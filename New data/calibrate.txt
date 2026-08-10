@@ -1,0 +1,193 @@
+For calibration, I'd use five test cases that exercise the calculator across **both flours, different flour quantities, and the temperature range**. I would deliberately include one warm case near the edge of the model.
+
+These use the current calculator assumptions:
+
+* Oven: **220°C**
+* Fridge: **7°C**
+* Salt: **2.5%**
+* Caputo 00 Pizzeria: **62% hydration**
+* T65: **61% hydration**
+* Normal yeast baseline: **0.10% IDY**
+* At 29°C, the previous calculator adjustment of **0.08%** is used as an extrapolated warm-temperature starting point, not a validated value.
+* Fermentation time is a **prediction/window**, with the dough's actual development overriding the clock.
+
+## Calibration test 1 — Caputo 00, cool room
+
+**Inputs**
+
+```text
+Flour: 180 g
+Flour type: Caputo 00 Pizzeria
+Ambient: 18°C
+Fridge: 7°C
+Oven: 220°C
+```
+
+### Expected result
+
+| Ingredient      |      % |       Weight |
+| --------------- | -----: | -----------: |
+| Caputo 00       |   100% | **180.00 g** |
+| Water           |    62% | **111.60 g** |
+| Salt            |   2.5% |   **4.50 g** |
+| Saf-Instant Red |  0.10% |   **0.18 g** |
+| **Total**       | 164.6% | **296.28 g** |
+
+**Fermentation prediction:** ~6–7 h at 18°C
+**Start checking:** ~5.5 h
+**Refrigerate:** around 30–50% volume increase.
+
+---
+
+# Calibration test 2 — T65, baseline temperature
+
+**Inputs**
+
+```text
+Flour: 180 g
+Flour type: Spanish T65
+Ambient: 21°C
+Fridge: 7°C
+Oven: 220°C
+```
+
+### Expected result
+
+| Ingredient      |      % |       Weight |
+| --------------- | -----: | -----------: |
+| T65             |   100% | **180.00 g** |
+| Water           |    61% | **109.80 g** |
+| Salt            |   2.5% |   **4.50 g** |
+| Saf-Instant Red |  0.10% |   **0.18 g** |
+| **Total**       | 163.5% | **294.48 g** |
+
+**Fermentation prediction:** ~4.5–5.5 h at 21°C
+**Start checking:** ~4 h
+**Refrigerate:** around 30–50% volume increase.
+
+This is a particularly useful control because **21°C is close to our central reference condition**.
+
+---
+
+# Calibration test 3 — Caputo 00, warmer room
+
+**Inputs**
+
+```text
+Flour: 270 g
+Flour type: Caputo 00 Pizzeria
+Ambient: 24°C
+Fridge: 7°C
+Oven: 220°C
+```
+
+### Expected result
+
+| Ingredient      |      % |       Weight |
+| --------------- | -----: | -----------: |
+| Caputo 00       |   100% | **270.00 g** |
+| Water           |    62% | **167.40 g** |
+| Salt            |   2.5% |   **6.75 g** |
+| Saf-Instant Red |  0.10% |   **0.27 g** |
+| **Total**       | 164.6% | **444.42 g** |
+
+**Fermentation prediction:** ~3.5–4 h at 24°C
+**Start checking:** ~3 h
+**Refrigerate:** around 30–50% volume increase.
+
+This tests whether the calculator is responding sensibly to increased ambient temperature while keeping the yeast baseline constant.
+
+---
+
+# Calibration test 4 — T65, larger batch / cool room
+
+**Inputs**
+
+```text
+Flour: 300 g
+Flour type: Spanish T65
+Ambient: 19°C
+Fridge: 7°C
+Oven: 220°C
+```
+
+### Expected result
+
+| Ingredient      |      % |       Weight |
+| --------------- | -----: | -----------: |
+| T65             |   100% | **300.00 g** |
+| Water           |    61% | **183.00 g** |
+| Salt            |   2.5% |   **7.50 g** |
+| Saf-Instant Red |  0.10% |   **0.30 g** |
+| **Total**       | 163.5% | **490.50 g** |
+
+**Fermentation prediction:** ~5.5–6.5 h at 19°C
+**Start checking:** ~5 h
+**Refrigerate:** around 30–50% volume increase.
+
+This is useful for checking that scaling the flour quantity **doesn't incorrectly alter the baker's percentages**.
+
+---
+
+# Calibration test 5 — Caputo 00, very warm room
+
+This is the deliberately difficult one.
+
+**Inputs**
+
+```text
+Flour: 270 g
+Flour type: Caputo 00 Pizzeria
+Ambient: 29°C
+Fridge: 7°C
+Oven: 220°C
+```
+
+### Expected result
+
+| Ingredient      |       % |       Weight |
+| --------------- | ------: | -----------: |
+| Caputo 00       |    100% | **270.00 g** |
+| Water           |     62% | **167.40 g** |
+| Salt            |    2.5% |   **6.75 g** |
+| Saf-Instant Red |  ~0.08% |  **0.216 g** |
+| **Total**       | 164.58% | **444.37 g** |
+
+For practical weighing:
+
+**0.22 g yeast**
+
+**Fermentation prediction:** approximately **2–3 h**
+**Start checking:** ~1.75–2 h.
+
+This is an **extrapolation beyond the calculator's calibrated 18–27°C range**, so the dough condition is particularly important here. I would not allow the calculator to claim that 2.5 h is "correct" simply because the model says so.
+
+---
+
+# All five at a glance
+
+| Test  | Flour     | Ambient | Flour | Hydration |   Water |   Salt |      Yeast | RT prediction |
+| ----- | --------- | ------: | ----: | --------: | ------: | -----: | ---------: | ------------: |
+| **1** | Caputo 00 |    18°C | 180 g |       62% | 111.6 g |  4.5 g |     0.18 g |        ~6–7 h |
+| **2** | T65       |    21°C | 180 g |       61% | 109.8 g |  4.5 g |     0.18 g |    ~4.5–5.5 h |
+| **3** | Caputo 00 |    24°C | 270 g |       62% | 167.4 g | 6.75 g |     0.27 g |      ~3.5–4 h |
+| **4** | T65       |    19°C | 300 g |       61% | 183.0 g |  7.5 g |     0.30 g |    ~5.5–6.5 h |
+| **5** | Caputo 00 |    29°C | 270 g |       62% | 167.4 g | 6.75 g | **0.22 g** |        ~2–3 h |
+
+### What your calculator should be checked against
+
+For tests **1–4**, the important thing is that the calculator reproduces the percentages and scaling exactly:
+
+* Water = flour × hydration
+* Salt = flour × 2.5%
+* Yeast = flour × 0.10%
+* Total dough = sum of ingredients
+
+For test **5**, it should recognize that **29°C is outside the validated temperature table** and label the yeast/time recommendation as an extrapolation rather than presenting false precision.
+
+Also, the Caputo assumption is specifically **Pizzeria 00**, which Caputo currently specifies at 12.5% protein and W 260–280. ([Mulino Caputo][1]) Saf confirms Red is an instant yeast for lean/low-sugar doughs and pizza, and that it can be incorporated directly into the flour. ([Saf-instant®][2])
+
+**One correction worth making to the markdown calculator:** I would change the yeast section so that **temperature changes fermentation time first**, while yeast percentage remains at 0.10% within the validated operating range. Only outside that range—such as 29°C—should the calculator optionally suggest a lower yeast dose and clearly label it as an extrapolation. That will make the calculator more scientifically defensible.
+
+[1]: https://www.mulinocaputo.it/en/prodotti/pizzeria/?utm_source=chatgpt.com "Pizzeria Flour 1kg - Mulino Caputo"
+[2]: https://saf-instant.com/en/home-baking/our-products/saf-instant-the-original-red-11g/?utm_source=chatgpt.com "Saf-instant® The Original Red 11g • Saf-instant®"

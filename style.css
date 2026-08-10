@@ -41,6 +41,31 @@ h1 {
   color: var(--muted);
 }
 
+.tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.tab-btn {
+  background: #e5e7eb;
+  color: #1f2937;
+}
+
+.tab-btn.is-active {
+  background: #111827;
+  color: #fff;
+}
+
+.tab-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.tab-panel[hidden] {
+  display: none;
+}
+
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -193,6 +218,78 @@ button:disabled {
 .stage-step {
   font-size: 0.8rem;
   text-transform: uppercase;
+}
+
+.note {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.ball-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.ball-list li {
+  display: grid;
+  gap: 2px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.ball-list li strong {
+  color: var(--text);
+}
+
+.advice {
+  margin-top: 10px;
+  border-left: 4px solid var(--complete);
+  background: #eff6ff;
+  border-radius: 0 10px 10px 0;
+  padding: 10px;
+  font-size: 0.9rem;
+}
+
+.info-list {
+  display: grid;
+  gap: 8px;
+}
+
+.info-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.info-label {
+  color: var(--muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.confidence {
+  font-weight: 700;
+}
+
+.confidence-high {
+  color: #2e7d32;
+}
+
+.confidence-medium {
+  color: #9a6700;
+}
+
+.confidence-low {
+  color: #b42318;
 }
 
 @media (min-width: 640px) {

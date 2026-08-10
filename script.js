@@ -1,354 +1,137 @@
+const flourTypeInput = document.getElementById("flour-type");
 const flourInput = document.getElementById("flour");
 const tempInput = document.getElementById("temp");
-const hydrationInput = document.getElementById("hydration");
-const proofModeInput = document.getElementById("proof-mode");
+const ovenTempInput = document.getElementById("oven-temp");
+const fridgeTempInput = document.getElementById("fridge-temp");
+const hydrationModeInput = document.getElementById("hydration-mode");
+const manualHydrationInput = document.getElementById("manual-hydration");
 const calculateBtn = document.getElementById("calculate");
 const resetBtn = document.getElementById("reset");
 const ingredientsDiv = document.getElementById("ingredients");
-const stagesDiv = document.getElementById("stages");
-const timelineDiv = document.getElementById("timeline");
+const tabButtons = Array.from(document.querySelectorAll(".tab-btn"));
+const tabPanels = Array.from(document.querySelectorAll(".tab-panel"));
 
 const STORAGE_KEY = "pizzaTracker";
-const DEFAULT_HYDRATION = 65;
-const DEFAULT_PROOF_MODE = "room_overnight";
+const FLOUR_PER_PIZZA = 90;
+const SALT_PERCENT = 2.5;
+const YEAST_PERCENT = 0.1;
+const FLOUR_TYPES = {
+  caputo: { name: "Caputo 00 Pizzeria", hydration: 62, confidence: "high" },
+  t65: { name: "Spanish T65", hydration: 61, confidence: "medium" },
+};
+const OVEN_CORRECTIONS = [[200, -2], [210, -1], [220, 0], [230, 0.5], [240, 1], [250, 1.5], [275, 2.5], [300, 3.5], [350, 5]];
 
-let stages = [];
-
-function clamp(min, max, value) {
-  return Math.min(max, Math.max(min, value));
+function roundTo(value, digits) {
+  const factor = 10 ** digits;
+  return Math.round(value * factor) / factor;
 }
 
-function activityFactor(tempC) {
-  return 2 ** ((tempC - 21) / 10);
+function interpolate(points, value) {
+  if (value <= points[0][0]) return { value: points[0][1], extrapolated: value < points[0][0] };
+  const last = points[points.length - 1];
+  if (value >= last[0]) return { value: last[1], extrapolated: value > last[0] };
+  for (let i = 0; i < points.length - 1; i++) {
+    const [x1, y1] = points[i];
+    const [x2, y2] = points[i + 1];
+    if (value >= x1 && value <= x2) return { value: y1 + ((value - x1) / (x2 - x1)) * (y2 - y1), extrapolated: false };
+  }
+  return { value: 0, extrapolated: true };
 }
 
-function buildStagePlan(hydration, proofMode, roomTempC) {
-  const isHighHydration = hydration >= 75;
-  const autolyseSec = 25 * 60;
-  const bulkOrBenchSec = isHighHydration ? Math.round(2.25 * 3600) : 20 * 60;
-  const roomProofSec = Math.round(3 * 3600 * (activityFactor(21) / activityFactor(roomTempC)));
-  const roomOvernightRoomSec = 5 * 3600;
-  const overnightColdSec = 12 * 3600;
-  const temperSec = proofMode === "room_temperature" ? 0 : 2 * 3600;
-
-  const stagePlan = [];
-  stagePlan.push({ name: "Autolyse", color: "#ff3b30", duration: autolyseSec });
-  stagePlan.push({
-    name: "Bulk Fermentation",
-    color: "#0ea5e9",
-    duration: bulkOrBenchSec,
-  });
-  stagePlan.push({
-    name: proofMode === "room_temperature" ? "Final Proof" : "Cold Proof",
-    color: "#f59e0b",
-    duration: proofMode === "room_temperature" ? roomProofSec : 0,
-  });
-  if (proofMode === "room_overnight") {
-    stagePlan.length = 0;
-    stagePlan.push({ name: "Autolyse", color: "#ff3b30", duration: autolyseSec });
-    stagePlan.push({
-      name: "Bulk Fermentation",
-      color: "#0ea5e9",
-      duration: bulkOrBenchSec,
-    });
-    stagePlan.push({
-      name: "Room Ferment",
-      color: "#f59e0b",
-      duration: roomOvernightRoomSec,
-    });
-    stagePlan.push({
-      name: "Overnight Cold Proof",
-      color: "#a78bfa",
-      duration: overnightColdSec,
-    });
-  }
-  if (temperSec > 0) {
-    stagePlan.push({ name: "Temper", color: "#34d399", duration: temperSec });
-  }
+function buildPlan(flourTypeKey, flour, ambient, settings) {
+  const flourType = FLOUR_TYPES[flourTypeKey];
+  const ovenCorrection = interpolate(OVEN_CORRECTIONS, settings.ovenTemp);
+  const recommendedHydration = flourType.hydration + ovenCorrection.value;
+  const hydration = settings.hydrationMode === "manual" ? settings.manualHydration : recommendedHydration;
+  const water = flour * hydration / 100;
+  const salt = flour * SALT_PERCENT / 100;
+  const yeast = flour * YEAST_PERCENT / 100;
+  const totalDough = flour + water + salt + yeast;
 
   return {
-    stagePlan,
-    autolyseSec,
-    bulkOrBenchSec,
-    roomProofSec,
-    temperSec,
-    roomOvernightRoomSec,
-    overnightColdSec,
+    flourType, flour, hydration: roundTo(hydration, 1), recommendedHydration: roundTo(recommendedHydration, 1),
+    hydrationMode: settings.hydrationMode, water: roundTo(water, 2), salt: roundTo(salt, 2),
+    yeast: roundTo(yeast, 3), yeastPct: YEAST_PERCENT, totalDough: roundTo(totalDough, 2),
   };
 }
 
-function calculateYeastPct(
-  proofMode,
-  bulkOrBenchSec,
-  roomProofSec,
-  temperSec,
-  roomTempC,
-  roomOvernightRoomSec,
-  overnightColdSec,
-) {
-  const bulkOrBenchHours = bulkOrBenchSec / 3600;
-  const roomProofHours = roomProofSec / 3600;
-  const temperHours = temperSec / 3600;
-  const roomOvernightRoomHours = roomOvernightRoomSec / 3600;
-  const overnightColdHours = overnightColdSec / 3600;
-
-  let efu = 0;
-  if (proofMode === "room_temperature") {
-    efu = (bulkOrBenchHours + roomProofHours) * activityFactor(roomTempC);
-  } else if (proofMode === "room_overnight") {
-    efu =
-      (bulkOrBenchHours + roomOvernightRoomHours + temperHours) * activityFactor(roomTempC) +
-      overnightColdHours * activityFactor(4);
-  }
-
-  return clamp(0.03, 1.0, 1.6 / Math.max(efu, 0.01));
-}
-
-function formatTime(totalSeconds) {
-  const safe = Math.max(0, Math.floor(totalSeconds));
-  const hours = Math.floor(safe / 3600);
-  const minutes = Math.floor((safe % 3600) / 60);
-  if (hours && minutes) return `${hours} hr ${minutes} min`;
-  if (hours) return `${hours} hr`;
-  return `${minutes} min`;
-}
-
-function getTotalDuration() {
-  return stages.reduce((sum, stage) => sum + stage.duration, 0);
-}
-
-function updateControlState() {
-  resetBtn.disabled = !stages.length;
-}
-
-function renderIngredients(water, yeast, salt) {
-  const hydration = parseFloat(hydrationInput.value) || DEFAULT_HYDRATION;
+function renderIngredients(plan) {
+  const hydrationDetail = plan.hydrationMode === "manual"
+    ? `Recommended ${plan.recommendedHydration}% · using ${plan.hydration}%`
+    : `${plan.hydration}% auto recommendation`;
   ingredientsDiv.innerHTML = `
-    <h2 class="ingredients-title">Ingredients</h2>
+    <h2 class="ingredients-title">Formula</h2>
     <div class="ingredients-grid">
-      <div class="ingredient-item"><strong>Water</strong>${water} g</div>
-      <div class="ingredient-item"><strong>Dry Yeast</strong>${yeast} g</div>
-      <div class="ingredient-item"><strong>Salt</strong>${salt} g</div>
-      <div class="ingredient-item"><strong>Hydration</strong>${hydration.toFixed(1)}%</div>
+      <div class="ingredient-item"><strong>Flour (${plan.flourType.name})</strong>${plan.flour} g</div>
+      <div class="ingredient-item"><strong>Water</strong>${plan.water} g</div>
+      <div class="ingredient-item"><strong>Hydration</strong>${hydrationDetail}</div>
+      <div class="ingredient-item"><strong>Guérande coarse salt</strong>${plan.salt} g (${SALT_PERCENT}% baker's percentage)</div>
+      <div class="ingredient-item"><strong>Model yeast (${plan.yeastPct}%)</strong>${plan.yeast} g</div>
+      <div class="ingredient-item"><strong>Total dough</strong>${plan.totalDough} g</div>
     </div>
   `;
 }
 
-function calculateTimelineWeights() {
-  const totalDuration = getTotalDuration();
-  if (!totalDuration) return [];
-  const alpha = 0.45;
-  const minVisualShare = 0.15;
-  const rawWeights = stages.map((stage) => {
-    const share = stage.duration / totalDuration;
-    return minVisualShare + alpha * share;
-  });
-  const sum = rawWeights.reduce((acc, weight) => acc + weight, 0);
-  return rawWeights.map((weight) => (weight / sum) * 100);
-}
-
-function renderTimeline() {
-  if (!stages.length) {
-    timelineDiv.innerHTML = "";
-    return;
-  }
-
-  const timelineWeights = calculateTimelineWeights();
-  const totalDuration = getTotalDuration();
-
-  const segmentsHtml = stages
-    .map((stage, index) => {
-      const width = (timelineWeights[index] || 0).toFixed(2);
-      return `
-        <div class="timeline-segment" style="width:${width}%;background:${stage.color}">
-          <span>${index + 1}</span>
-        </div>
-      `;
-    })
-    .join("");
-
-  const legendHtml = stages
-    .map((stage, index) => {
-      return `
-        <li>
-          <span class="swatch" style="background:${stage.color}"></span>
-          <span class="stage-step">Step ${index + 1}</span>
-          <strong>${stage.name}</strong>
-          <span>${formatTime(stage.duration)}</span>
-        </li>
-      `;
-    })
-    .join("");
-
-  timelineDiv.innerHTML = `
-    <h2>Process Timeline</h2>
-    <p class="timeline-total">Total time: ${formatTime(totalDuration)}</p>
-    <div class="timeline-track">
-      ${segmentsHtml}
-    </div>
-    <ul class="timeline-legend">${legendHtml}</ul>
-  `;
-}
-
-function getCurrentState() {
-  const flour = parseFloat(flourInput.value) || 0;
-  const hydration = parseFloat(hydrationInput.value) || DEFAULT_HYDRATION;
-  const roomTempC = clamp(0, 40, parseFloat(tempInput.value) || 20);
-  const proofMode = proofModeInput.value || DEFAULT_PROOF_MODE;
-  const {
-    bulkOrBenchSec,
-    roomProofSec,
-    temperSec,
-    roomOvernightRoomSec,
-    overnightColdSec,
-  } = buildStagePlan(hydration, proofMode, roomTempC);
-  const yeastPct = calculateYeastPct(
-    proofMode,
-    bulkOrBenchSec,
-    roomProofSec,
-    temperSec,
-    roomTempC,
-    roomOvernightRoomSec,
-    overnightColdSec,
-  );
-
-  return {
-    flour: flour || null,
-    temp: parseFloat(tempInput.value) || null,
-    hydration,
-    proofMode,
-    water: ((flour * hydration) / 100).toFixed(1),
-    yeast: (flour * (yeastPct / 100)).toFixed(2),
-    salt: (flour * 0.025).toFixed(2),
-    stages,
-    updatedAtMs: Date.now(),
-  };
-}
-
-function applyState(state) {
-  if (!state) return;
-
-  flourInput.value = state.flour ?? "";
-  tempInput.value = state.temp ?? "";
-  hydrationInput.value = state.hydration ?? DEFAULT_HYDRATION;
-  proofModeInput.value = state.proofMode || DEFAULT_PROOF_MODE;
-
-  stages = state.stages || [];
-
-  if (state.water && state.yeast && state.salt) {
-    renderIngredients(state.water, state.yeast, state.salt);
-  }
-
-  if (stages.length) {
-    renderTimeline();
-  } else {
-    stagesDiv.innerHTML = "";
-    timelineDiv.innerHTML = "";
-  }
-
-  updateControlState();
-}
-
-function saveProgress(data) {
-  const existing = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
-  const updated = { ...existing, ...data };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-}
-
-function persistAll(extra = {}) {
-  const payload = {
-    ...getCurrentState(),
-    ...extra,
-  };
-  saveProgress(payload);
-}
-
-function clearAllState() {
-  stages = [];
+function clearResults() {
   ingredientsDiv.innerHTML = "";
-  stagesDiv.innerHTML = "";
-  timelineDiv.innerHTML = "";
 }
 
-function setDefaultInputs() {
-  flourInput.value = "180";
-  tempInput.value = "20";
-  hydrationInput.value = String(DEFAULT_HYDRATION);
-  proofModeInput.value = DEFAULT_PROOF_MODE;
+function getSettings() {
+  return {
+    ovenTemp: parseFloat(ovenTempInput.value), fridgeTemp: parseFloat(fridgeTempInput.value),
+    hydrationMode: hydrationModeInput.value, manualHydration: parseFloat(manualHydrationInput.value), ambient: parseFloat(tempInput.value),
+  };
+}
+
+function saveInputs(data) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+function loadInputs() {
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+  if (!saved) return;
+  const inputs = document.querySelectorAll("input, select");
+  inputs.forEach((input) => {
+    if (saved[input.id] !== undefined) input.value = saved[input.id];
+  });
+  toggleConditionalInputs();
+}
+
+function toggleConditionalInputs() {
+  manualHydrationInput.hidden = hydrationModeInput.value !== "manual";
 }
 
 function runCalculation() {
+  const flourTypeKey = flourTypeInput.value;
   const flour = parseFloat(flourInput.value);
-  const temp = parseFloat(tempInput.value);
-  const hydrationRaw = parseFloat(hydrationInput.value);
-  const hydration = hydrationRaw;
-  const roomTempC = clamp(0, 40, temp);
-  const proofMode = proofModeInput.value || DEFAULT_PROOF_MODE;
-
-  if (
-    !flour ||
-    !temp ||
-    !hydrationRaw ||
-    flour <= 0 ||
-    temp <= 0 ||
-    hydration < 40 ||
-    hydration > 90
-  ) {
-    return alert("Enter valid values.");
-  }
-
-  const water = ((flour * hydration) / 100).toFixed(1);
-  const salt = (flour * 0.025).toFixed(2);
-  const {
-    stagePlan,
-    bulkOrBenchSec,
-    roomProofSec,
-    temperSec,
-    roomOvernightRoomSec,
-    overnightColdSec,
-  } = buildStagePlan(hydration, proofMode, roomTempC);
-  const yeastPct = calculateYeastPct(
-    proofMode,
-    bulkOrBenchSec,
-    roomProofSec,
-    temperSec,
-    roomTempC,
-    roomOvernightRoomSec,
-    overnightColdSec,
-  );
-  const yeast = (flour * (yeastPct / 100)).toFixed(2);
-
-  renderIngredients(water, yeast, salt);
-  stages = stagePlan;
-  stagesDiv.innerHTML = "";
-  renderTimeline();
-
-  updateControlState();
-  persistAll({ water, yeast, salt });
+  const ambient = parseFloat(tempInput.value);
+  const settings = getSettings();
+  if (!FLOUR_TYPES[flourTypeKey]) return alert("Select a flour type.");
+  if (!flour || flour < FLOUR_PER_PIZZA) return alert(`Minimum is ${FLOUR_PER_PIZZA} g of flour.`);
+  if (!ambient || ambient <= 0) return alert("Enter a valid ambient temperature.");
+  if (Object.values(settings).some((value) => typeof value === "number" && (!Number.isFinite(value) || value < 0))) return alert("Enter valid calculation settings.");
+  const plan = buildPlan(flourTypeKey, flour, ambient, settings);
+  renderIngredients(plan);
+  const fields = Array.from(document.querySelectorAll("input, select"));
+  saveInputs(Object.fromEntries(fields.map((input) => [input.id, input.value])));
+  resetBtn.disabled = false;
 }
 
-calculateBtn.addEventListener("click", () => {
-  runCalculation();
-});
+tabButtons.forEach((btn) => btn.addEventListener("click", () => {
+  const target = btn.dataset.tab;
+  tabButtons.forEach((button) => {
+    const active = button === btn;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+  tabPanels.forEach((panel) => { panel.hidden = panel.id !== target; });
+}));
 
+hydrationModeInput.addEventListener("change", toggleConditionalInputs);
+calculateBtn.addEventListener("click", runCalculation);
 resetBtn.addEventListener("click", () => {
-  if (resetBtn.disabled) return;
-  if (!stages.length) return;
-  clearAllState();
-  updateControlState();
-  setDefaultInputs();
   localStorage.removeItem(STORAGE_KEY);
+  window.location.reload();
 });
 
-function loadProgress() {
-  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-  setDefaultInputs();
-  if (saved) {
-    applyState(saved);
-  } else {
-    clearAllState();
-    updateControlState();
-  }
-}
-
-loadProgress();
+loadInputs();

@@ -8,35 +8,63 @@
 </head>
 <body>
   <main class="app">
-    <h1>Dingo Pizza</h1>
-    <section class="card">
-      <div class="inputs">
-        <label for="flour">Flour (grams)</label>
-        <input type="number" id="flour" min="1" step="0.1" value="180" placeholder="e.g. 500" />
+    <header class="app-header">
+      <h1>Dingo Pizza</h1>
+      <p class="subtitle">Neapolitan pizza dough calculator</p>
+    </header>
 
-        <label for="temp">Room Temperature (°C)</label>
-        <input type="number" id="temp" min="0" max="40" step="0.1" value="20" placeholder="e.g. 22" />
+    <nav class="tabs" role="tablist">
+      <button class="tab-btn is-active" data-tab="calculator" role="tab" aria-selected="true">Calculator</button>
+      <button class="tab-btn" data-tab="details" role="tab" aria-selected="false">Details</button>
+    </nav>
 
-        <label for="hydration">Hydration (%)</label>
-        <input type="number" id="hydration" min="40" max="90" step="0.1" value="65" />
+    <section id="calculator" class="tab-panel" role="tabpanel">
+      <section class="card">
+        <div class="inputs">
+          <label for="flour-type">Flour Type</label>
+          <select id="flour-type">
+            <option value="caputo" selected>Caputo 00 Pizzeria</option>
+            <option value="t65">Spanish T65</option>
+          </select>
 
-        <label for="proof-mode">Proof Mode</label>
-        <select id="proof-mode">
-          <option value="room_overnight" selected>Room 4-6h + Overnight Cold</option>
-          <option value="room_temperature">Room Temperature</option>
-        </select>
+          <label for="flour">Flour (grams)</label>
+          <input type="number" id="flour" min="90" step="1" value="180" placeholder="e.g. 180" />
 
-        <div class="button-row">
-          <button id="calculate">Calculate</button>
-          <button id="reset" disabled>RESET</button>
+          <label for="temp">Ambient Temperature (°C)</label>
+          <input type="number" id="temp" min="0" max="45" step="0.5" value="21" placeholder="e.g. 21" />
+
+          <div class="button-row">
+            <button id="calculate">Calculate</button>
+            <button id="reset" disabled>RESET</button>
+          </div>
         </div>
-      </div>
+      </section>
+
+      <section class="card" id="ingredients"></section>
     </section>
 
-    <section class="card" id="ingredients"></section>
+    <section id="details" class="tab-panel" role="tabpanel" hidden>
+      <section class="card">
+        <h2 class="ingredients-title">Calculation Settings</h2>
+        <p class="note">Defaults use the HOME-OVEN-220-7C profile. Changes create a custom profile.</p>
+        <div class="inputs settings-inputs">
+          <label for="oven-temp">Oven Temperature (°C)</label>
+          <input type="number" id="oven-temp" min="150" max="350" step="5" value="220" />
 
-    <section class="card timeline-card" id="timeline"></section>
-    <section class="card" id="stages"></section>
+          <label for="fridge-temp">Refrigerator Temperature (°C)</label>
+          <input type="number" id="fridge-temp" min="0" max="15" step="0.5" value="7" />
+
+          <label for="hydration-mode">Hydration Mode</label>
+          <select id="hydration-mode">
+            <option value="auto" selected>Auto recommendation</option>
+            <option value="manual">Manual override</option>
+          </select>
+          <input type="number" id="manual-hydration" min="40" max="100" step="0.1" value="62" hidden placeholder="Hydration (%)" />
+
+        </div>
+      </section>
+
+    </section>
   </main>
 
   <script src="script.js"></script>
