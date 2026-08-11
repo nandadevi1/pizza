@@ -4,6 +4,8 @@
 **Version:** 1.0  
 **Date:** 2026-08-10
 
+> **UPDATE (2026-08-11):** The default yeast baseline changed from **0.10%** to **1.0%** instant dry yeast, based on Tony Gemignani, *The Pizza Bible* (2014), "Master Dough without Starter" (4.5 g active dry yeast / 453 g flour = 1.0%). All **0.10%** references below are superseded.
+
 This calculator is designed for the following fixed conditions:
 
 - **Oven:** 220°C maximum

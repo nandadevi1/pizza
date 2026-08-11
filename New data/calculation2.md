@@ -3,6 +3,8 @@
 
 Version 2.0 — 2026-08-10
 
+> **UPDATE (2026-08-11):** The default yeast percentage changed from **0.10%** to **1.0%**, based on Tony Gemignani, *The Pizza Bible* (2014), "Master Dough without Starter" (4.5 g active dry yeast / 453 g flour = 1.0%). Yeast remains a configurable input; the examples below that reference 0.10% are superseded.
+
 ## Purpose
 
 Calculation 1 used fixed conditions:

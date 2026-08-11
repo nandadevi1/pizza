@@ -10,7 +10,9 @@ refrigerator_temperature_c = 7
 
 salt_percent = 2.5
 
-yeast_percent = 0.10
+yeast_percent = 1.0
+
+Yeast is based on Tony Gemignani, The Pizza Bible (2014), Master Dough without Starter: 4.5 g active dry yeast per 453 g flour = 1.0%.
 
 Hydration:
 
@@ -22,7 +24,7 @@ Calculations:
 
 water_g = flour_amount_g * hydration_percent / 100
 salt_g = flour_amount_g * 2.5 / 100
-yeast_g = flour_amount_g * 0.10 / 100
+yeast_g = flour_amount_g * 1.0 / 100
 total_dough_g = flour_amount_g + water_g + salt_g + yeast_g
 
 Room-temperature fermentation:

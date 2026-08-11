@@ -1,5 +1,7 @@
 For calibration, I'd use five test cases that exercise the calculator across **both flours, different flour quantities, and the temperature range**. I would deliberately include one warm case near the edge of the model.
 
+> **UPDATE (2026-08-11):** The normal yeast baseline changed from **0.10%** to **1.0%** IDY, based on Tony Gemignani, *The Pizza Bible* (2014), "Master Dough without Starter" (4.5 g active dry yeast / 453 g flour = 1.0%). The 0.10% yeast values in the test cases below are superseded.
+
 These use the current calculator assumptions:
 
 * Oven: **220°C**

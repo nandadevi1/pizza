@@ -64,11 +64,12 @@ npx serve .
 - **CSS Classes:** kebab-case (`tab-panel`, `button-row`)
 
 ## Formula Logic
-- Constants: `FLOUR_PER_PIZZA = 90`, `SALT_PERCENT = 2.5`, `YEAST_PERCENT = 0.1`
+- Constants: `FLOUR_PER_PIZZA = 90`, `SALT_PERCENT = 2.5`, `YEAST_PERCENT = 1.0`
+- Yeast baseline (1.0%) derives from Tony Gemignani, *The Pizza Bible* (2014), "Master Dough without Starter": 4.5 g active dry yeast per 453 g flour = 1.0% baker's percentage
 - `FLOUR_TYPES`: `caputo` (hydration 62), `t65` (hydration 61), each with a confidence rating
 - `OVEN_CORRECTIONS`: `[ovenTemp, hydrationDelta]` breakpoints, interpolated linearly via `interpolate()`
 - `recommendedHydration = flourType.hydration + ovenCorrection`; manual mode overrides it
-- `water = flour * hydration / 100`, `salt = flour * 0.025`, `yeast = flour * 0.001`
+- `water = flour * hydration / 100`, `salt = flour * 0.025`, `yeast = flour * 0.01`
 - Default profile: HOME-OVEN-220-7C (oven 220°C, fridge 7°C)
 
 ## Storage

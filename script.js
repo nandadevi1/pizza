@@ -14,7 +14,7 @@ const tabPanels = Array.from(document.querySelectorAll(".tab-panel"));
 const STORAGE_KEY = "pizzaTracker";
 const FLOUR_PER_PIZZA = 90;
 const SALT_PERCENT = 2.5;
-const YEAST_PERCENT = 0.1;
+const YEAST_PERCENT = 1.0;
 const FLOUR_TYPES = {
   caputo: { name: "Caputo 00 Pizzeria", hydration: 62, confidence: "high" },
   t65: { name: "Spanish T65", hydration: 61, confidence: "medium" },
